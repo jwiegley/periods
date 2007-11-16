@@ -14,6 +14,7 @@
 	   time-periods
 	   map-over-time
 	   do-over-time
+	   collect-by-period
 	   sleep-until))
 
 (in-package :periods)
@@ -238,22 +239,26 @@
   (if specifier
       (let* ((step-by (getf specifier :step-by))
 	     (skip (getf specifier :skip))
-	     (to (getf specifier :to))
+	     (until (getf specifier :until))
 	     (end-of-range
 	      (apply #'increment-time*
 		     epoch
-		     :terminus (or terminus to)
+		     :terminus (or terminus until)
+		     :terminus-forward-p t
 		     :floorp floorp
 		     step-by)))
-	(if skip
-	    (values epoch end-of-range
-		    (apply #'increment-time* epoch
-			   :terminus (or terminus to)
-			   :floorp floorp
-			   skip))
-	    (values epoch end-of-range end-of-range)))
+	(when end-of-range
+	  (if skip
+	      (values epoch end-of-range
+		      (apply #'increment-time* epoch
+			     :terminus (or terminus until)
+			     :terminus-forward-p t
+			     :floorp floorp
+			     skip))
+	      (values epoch end-of-range end-of-range))))
       (increment-time* epoch
 		       :terminus terminus
+		       :terminus-forward-p t
 		       :years years
 		       :months months
 		       :days days
@@ -275,7 +280,7 @@
 		       (floorp nil))
   (increment-time* epoch
 		   :terminus terminus
-		   :terminus-forward-p t
+		   :terminus-forward-p nil
 		   :years (- years)
 		   :months (- months)
 		   :days (- days)
@@ -298,7 +303,7 @@
 (defun time-period-generator (&key
 			      (specifier nil)
 			      (from nil)
-			      (to nil)
+			      (until nil)
 			      (years nil)
 			      (months nil)
 			      (days nil)
@@ -332,7 +337,7 @@
   convenience, there are several keywords for specifying basic spans of time:
 
     :FROM <LOCAL-TIME>       (where <TIME> can also be :NOW)
-    :TO   <LOCAL-TIME>
+    :UNTIL   <LOCAL-TIME>
 
     :YEARS <INTEGER>
     :MONTHS <INTEGER>
@@ -352,7 +357,7 @@
   Please see the documentation for that function for more details."
   (let ((time-specifier
 	 (if specifier
-	     (parse-time-period specifier)
+	     (parse-time-period  specifier)
 	     `(:step-by
 	       ,@(let (steps)
 		      (if years
@@ -370,10 +375,9 @@
 		      (if milliseconds
 			  (push `(:milliseconds ,milliseconds) steps))
 		      steps)
-	       :from ,from
-	       :to   ,to)))
+	       :from  ,from
+	       :until ,until)))
 	epoch terminated-p)
-    (format t "time-specifier = ~S~%" time-specifier)
     ;; construct a closure which iterates over the period
     (lambda (&optional new-from)
       (unless terminated-p
@@ -403,8 +407,8 @@
 (defun time-periods (&rest time-specifiers)
   (loop
      with generator = (apply #'time-period-generator time-specifiers)
-     for period = (funcall generator)
-     while period
+     for period = (multiple-value-list (funcall generator))
+     while (car period)
      collect period))
 
 (defun map-over-time (closure &rest time-specifiers)
@@ -422,6 +426,24 @@
 	  :for ,moment = (funcall ,generator)
 	  :while ,moment
 	  ,@loop-words))))
+
+;; This version of `collect-by-period' evolved thanks to help from pkhuong on
+;; #lisp.
+(defun collect-by-period (list periods &key (key #'identity))
+  (let (result)
+    (dolist (item list
+	     (mapcar (lambda (entry)
+		       (prog1 entry
+			 (setf (cdr entry)
+			       (nreverse (cdr entry)))))
+		     result))
+      (let ((date (funcall key item)))
+        (dolist (period periods)
+          (when (and (local-time>= date (nth 0 period))
+                     (local-time<= date (nth 1 period)))
+            (push item (cdr (or (assoc period result)
+                                (first (push (cons period nil)
+                                             result)))))))))))
 
 (provide 'periods)
 
