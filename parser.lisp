@@ -10,30 +10,30 @@
   (^ digits (parse-integer digits)))
 
 (defprod period ()
-  (^ (step-by ws (? (skip ws)) (? time-pair))
-     (append step-by skip time-pair)))
+  (^ (step-by (? (ws skip)) (? (ws range)))
+     (time-period :range range :step step-by :skip skip)))
 
 (defprod step-by ()
   (/
-   (^ ("every" ws units)      `(:step-by ,units))
-   (^ "hourly"		      '(:step-by (:hours 1)))
-   (^ "daily"		      '(:step-by (:days 1)))
-   (^ "weekly"		      '(:step-by (:weeks 1)))
-   (^ "monthly"		      '(:step-by (:months 1)))
-   (^ (/ "yearly" "annually") '(:step-by (:years 1)))))
+   (^ ("every" ws units)      (apply #'duration units))
+   (^ "hourly"		      (duration :hours 1))
+   (^ "daily"		      (duration :days 1))
+   (^ "weekly"		      (duration :days 7))
+   (^ "monthly"		      (duration :months 1))
+   (^ (/ "yearly" "annually") (duration :years 1))))
 
 (defprod skip ()
   (^ ("every" ws skip-units)
-     `(:skip ,skip-units)))
+     (apply #'duration skip-units)))
 
-(defprod time-pair (the-start the-end)
+(defprod range (the-start the-end)
   (^ (/
       ("from" ws (@ time-spec (setf the-start time-spec))
 	      ws "to"
 	      ws (@ time-spec (setf the-end time-spec)))
-      (@ ("since" ws time-spec) (setf the-start time-spec the-end :now))
-      (@ ("until" ws time-spec) (setf the-start :now the-end time-spec)))
-     (list :from the-start :to the-end)))
+      (@ ("since" ws time-spec) (setf the-start time-spec the-end (now)))
+      (@ ("until" ws time-spec) (setf the-start (now) the-end time-spec)))
+     (time-range :begin the-start :end the-end)))
 
 (defprod units ()
   ((^ unit unit)
@@ -58,7 +58,7 @@
 	  "minute"
 	  "hour"
 	  "day"
-	  "week"
+	  "week"			; jww (2007-11-19): meaning?
 	  "month"
 	  "year"))
       (? "s"))
@@ -77,16 +77,17 @@
    (^ "ninth" 8)
    (^ "tenth" 9)))
 
-(defprod time-spec (moment)
-  (/ (^ "now" :now)
-     (^ (unit ws (/ (@ "ago" (setf moment :ago))
-                    (@ "from now" (setf moment :hence))))
-        `(,@unit ,moment))))
+(defprod time-spec (reverse)
+  (/ (^ "now" (now))
+     (^ (unit ws (/ (@ "ago" (setf reverse t))
+                    (@ "from now" (setf reverse nil))))
+        (add-time (now) (apply #'duration unit)
+		  :reverse reverse))))
 
-(defparser time-period (^ period))
+(defparser time-period-parser (^ period))
 
 (defun parse-time-period (string)
-  (multiple-value-bind (ok value) (time-period string)
+  (multiple-value-bind (ok value) (time-period-parser string)
     (if ok value nil)))
 
 (defmacro tdp (production input)

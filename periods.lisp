@@ -46,8 +46,8 @@
 
 (defpackage :periods
   (:use :common-lisp :local-time
-	#+periods-use-series :series
-	#+periods-use-parser :com.gigamonkeys.parser)
+	#+:periods-use-series :series
+	#+:periods-use-parser :com.gigamonkeys.parser)
   (:nicknames :time-periods)
   (:export leapp
 	   current-year
