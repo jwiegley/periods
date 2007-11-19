@@ -552,62 +552,47 @@
   (declare (type duration duration))
   (declare (type boolean reverse))
   (let (next)
-    (lambda (&rest args)
-      (declare (ignore args))
+    (lambda ()
       (setf next (add-time (or next start) duration
 			   :reverse reverse)))))
 
 #+periods-use-series
-(defmacro scan-times (start duration
-		      &key (end nil) (reverse nil) (inclusive-p nil))
+(defmacro scan-times (start duration &key (reverse nil))
   "This macro represents continguous time durations as a SERIES.
 
-  The following returns all months until 2009 (non-inclusive):
+  Example:
 
-    (collect (scan-times @2007-11-01 (duration :months 1)
-                         :end @2009-01-01))
+    (subseries (scan-times @2007-11-01 (duration :months 1)) 0 10)
 
-  The :END is optional.  It could have been done with the `UNTIL-IF' collector
-  just as easily:
+  `UNTIL-IF' can be used to bound the end of the range by a date:
 
     (collect (until-if #'(lambda (time)
                            (local-time:local-time>= time @2009-01-01))
                        (scan-times @2007-11-01 (duration :months 1))))"
-  (let ((test-func
-	 (if end
-	     `#'(lambda (time)
-		  ,(if reverse
-		       (if inclusive-p
-			   `(local-time< time ,end)
-			   `(local-time<= time ,end))
-		       (if inclusive-p
-			   `(local-time> time ,end)
-			   `(local-time>= time ,end)))))))
-    `(let ((generator-func (time-generator ,start ,duration :reverse ,reverse)))
-       ,(if test-func
-	    `(series:scan-fn 'fixed-time generator-func generator-func
-			     ,test-func)
-	    '(series:scan-fn 'fixed-time generator-func generator-func)))))
+  `(map-fn 'fixed-time (time-generator ,start ,duration :reverse ,reverse)))
 
 (defmacro loop-times (forms start duration end
 		      &key (reverse nil) (inclusive-p nil))
   "Map over a set of times separated by DURATION, calling CALLABLE with the
   start of each."
-  (let ((generator-sym (gensym)))
-    `(progn
+  (let ((generator-sym (gensym))
+	(start-sym (gensym))
+	(end-sym (gensym)))
+    `(let ((,start-sym ,start)
+	   (,end-sym ,end))
        (assert (,(if reverse
 		     'local-time>
-		     'local-time<) ,start ,end))
+		     'local-time<) ,start-sym ,end-sym))
        (loop
-	  with ,generator-sym = (time-generator ,start ,duration)
+	  with ,generator-sym = (time-generator ,start-sym ,duration)
 	  for value = (funcall ,generator-sym)
 	  while ,(if reverse
 		     (if inclusive-p
-			 `(local-time>= value ,end)
-			 `(local-time> value ,end))
+			 `(local-time>= value ,end-sym)
+			 `(local-time> value ,end-sym))
 		     (if inclusive-p
-			 `(local-time<= value ,end)
-			 `(local-time< value ,end)))
+			 `(local-time<= value ,end-sym)
+			 `(local-time< value ,end-sym)))
 	  ,@forms))))
 
 (defmacro map-times (callable start duration end
@@ -618,8 +603,8 @@
       ,start ,duration ,end :reverse ,reverse
       :inclusive-p ,inclusive-p))
 
-(defmacro list-of-times (start duration end
-			 &key (reverse nil) (inclusive-p nil))
+(defmacro list-times (start duration end
+		      &key (reverse nil) (inclusive-p nil))
   "Return a list of all times within the given range."
   `(loop-times (collect value)
       ,start ,duration ,end :reverse ,reverse
@@ -632,7 +617,7 @@
   The disadvantage to `DO-TIMES' is that there is no way to ask for a reversed
   time sequence, or specify an inclusive endpoint."
   `(block nil
-     ,(map-times `#'(lambda (,var) ,@body) start duration end)
+     (map-times #'(lambda (,var) ,@body) ,start ,duration ,end)
      ,result))
 
 ;;;_ * RELATIVE-TIME
@@ -915,63 +900,61 @@
   (declare (type (or fixed-time null) anchor))
   (declare (type boolean reverse))
   (let (next)
-    (lambda (&rest args)
-      (declare (ignore args))
+    (lambda ()
       (setf next (next-time (or next anchor) relative-time
 			    :reverse reverse)))))
 
-(defmacro map-relative-times (callable relative-time end anchor
-			      &key (reverse nil) (inclusive-p))
+#+periods-use-series
+(defmacro scan-relative-times (anchor relative-time &key (reverse nil))
+  `(scan-fn 'fixed-time (relative-time-generator ,anchor ,relative-time
+						 :reverse ,reverse)))
+
+(defmacro loop-relative-times (forms anchor relative-time end
+			       &key (reverse nil) (inclusive-p))
   (let ((generator-sym (gensym))
-	(value-sym (gensym)))
-    `(progn
-       ,(if anchor
-	    `(assert (,(if reverse
-			   'local-time>
-			   'local-time<) ,anchor ,end)))
+	(anchor-sym (gensym))
+	(end-sym (gensym)))
+    `(let ((,anchor-sym ,anchor)
+	   (,end-sym ,end))
        (loop
 	  with ,generator-sym =
-	  (relative-time-generator ,relative-time ,anchor
+	  (relative-time-generator ,anchor-sym ,relative-time
 				   :reverse ,reverse)
-	  for ,value-sym = (funcall ,generator-sym)
+	  for value = (funcall ,generator-sym)
 	  while ,(if reverse
 		     (if inclusive-p
-			 `(local-time>= ,value-sym ,end)
-			 `(local-time> ,value-sym ,end))
+			 `(local-time>= value ,end-sym)
+			 `(local-time> value ,end-sym))
 		     (if inclusive-p
-			 `(local-time<= ,value-sym ,end)
-			 `(local-time< ,value-sym ,end)))
-	  do (funcall ,callable ,value-sym)))))
+			 `(local-time<= value ,end-sym)
+			 `(local-time< value ,end-sym)))
+	  ,@forms))))
 
-(defmacro do-relative-times ((var relative-time anchor end
+(defmacro map-relative-times (callable anchor relative-time end
+			      &key (reverse nil) (inclusive-p nil))
+  "Map over a set of times separated by DURATION, calling CALLABLE with the
+  start of each."
+  `(loop-relative-times (do (funcall ,callable value))
+      ,anchor ,relative-time ,end :reverse ,reverse
+      :inclusive-p ,inclusive-p))
+
+(defmacro list-relative-times (anchor relative-time end
+			       &key (reverse nil) (inclusive-p nil))
+  "Return a list of all times within the given range."
+  `(loop-relative-times (collect value)
+      ,anchor ,relative-time ,end :reverse ,reverse
+      :inclusive-p ,inclusive-p))
+
+(defmacro do-relative-times ((var anchor relative-time end
 				  &optional (result nil)) &body body)
   "A 'do' style version of the functional `MAP-RELATIVE-TIMES' macro.
 
   The disadvantage to `DO-RELATIVE-TIMES' is that there is no way to ask for a
   reversed time sequence, or specify an inclusive endpoint."
   `(block nil
-     ,(map-relative-times `#'(lambda (,var) ,@body) relative-time anchor end)
+     (map-relative-times #'(lambda (,var) ,@body)
+			 ,anchor ,relative-time ,end)
      ,result))
-
-#+periods-use-series
-(defmacro scan-relative-times (relative-time anchor
-			       &key (end nil) (reverse nil) (inclusive-p))
-  (let ((test-func
-	 (if end
-	     `#'(lambda (time)
-		  ,(if reverse
-		       (if inclusive-p
-			   `(local-time< time ,end)
-			   `(local-time<= time ,end))
-		       (if inclusive-p
-			   `(local-time> time ,end)
-			   `(local-time>= time ,end)))))))
-    `(let ((generator-func (relative-time-generator ,relative-time ,anchor
-						    :reverse ,reverse)))
-       ,(if test-func
-	    `(series:scan-fn 'fixed-time generator-func generator-func
-			     ,test-func)
-	    '(series:scan-fn 'fixed-time generator-func generator-func)))))
 
 ;; These routines return the present time if it matches
 (declaim (inline this-monday
@@ -1368,34 +1351,83 @@
 
 ;;;_ * PERIOD
 
-(defstruct period
-  (entire-range)
-  (include-stepper)
-  (skip-stepper)
-  (ranges))
+(defstruct time-period
+  (range)
+  (step)
+  (skip))
 
-(defun compose-period (range step &key (skip nil) (predicate nil))
-  (declare (ignore range))
-  (declare (ignore step))
-  (declare (ignore skip))
-  (declare (ignore predicate)))
+(defun time-period (&rest args)
+  (apply #'make-time-period args))
+
 (defun time-period-begin (period)
-  (declare (ignore period)))
-(defun time-period-end (period)
-  (declare (ignore period)))
-(defun in-time-period-p (period)
-  (declare (ignore period)))
+  (time-range-begin (time-period-range period)))
 
-(defun time-period-stepper (period)
-  (declare (ignore period)))
+(defun time-period-end (period)
+  (time-range-end (time-period-range period)))
+
+;;(defun time-within-period-p (period)
+;;  (declare (ignore period))
+;;  ;; jww (2007-11-19): this is a bit complicated..
+;;  )
+
 (defun time-period-generator (period)
-  (declare (ignore period)))
-(defun map-time-periods (period)
-  (declare (ignore period)))
-(defun do-time-periods (period)
-  (declare (ignore period)))
-(defun scan-time-periods (period)
-  (declare (ignore period)))
+  (declare (type time-period period))
+  (let ((step-stepper (time-stepper (time-period-step period)))
+	(skip-stepper (and (time-period-skip period)
+			   (time-stepper (time-period-skip period))))
+	(begin (time-period-begin period))
+	(end (time-period-end period))
+	(end-inclusive-p
+	 (time-range-end-inclusive-p (time-period-range period))))
+    (lambda ()
+      (if begin
+	  (let* ((this-end (funcall step-stepper begin))
+		 (next-begin (if skip-stepper
+				 (funcall skip-stepper begin)
+				 this-end)))
+	    (when end
+	      (if (if end-inclusive-p
+		      (local-time> next-begin end)
+		      (local-time>= next-begin end))
+		  (progn
+		    (if (local-time= this-end next-begin)
+			(setf this-end nil))
+		    (setf next-begin nil))))
+	    (multiple-value-prog1
+		(values begin this-end next-begin)
+	      (setf begin next-begin)))
+	  (values nil nil nil)))))
+
+(defmacro loop-time-period (forms period)
+  (let ((generator-sym (gensym)))
+    `(loop
+	with ,generator-sym = (time-period-generator ,period)
+	for (begin end next-begin) =
+	  (multiple-value-list (funcall ,generator-sym))
+	while begin
+	,@forms)))
+
+(defmacro map-time-period (callable period)
+  `(loop-time-period (do (funcall ,callable begin end next-begin))
+      ,period))
+
+(defmacro list-time-period (period)
+  `(loop-time-period (collect (list begin end next-begin))
+      ,period))
+
+(defmacro do-time-period ((begin-var end-var next-begin-var period
+				     &optional (result nil))
+			  &rest body)
+  `(block nil
+     (map-time-period
+      #'(lambda (,begin-var ,end-var ,next-begin-var)
+	  ,@body) ,period)
+     ,result))
+
+#+periods-use-series
+(defmacro scan-time-periods (period)
+  `(map-fn '(values fixed-time fixed-time fixed-time)
+	   (time-period-generator ,period)))
 
 (defun parse-period-description (string)
   (declare (ignore string)))
