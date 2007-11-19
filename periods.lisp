@@ -36,12 +36,18 @@
 ;; (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 ;; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+;;; Commentary:
+
+;; The PERIODS library is fully described in the PDF documentation which
+;; should have accompanied this source code.  Please refer there for complete
+;; details.
+
 (declaim (optimize (debug 3) (safety 3) (speed 1) (space 0)))
 
 (defpackage :periods
   (:use :common-lisp :local-time
-	#+periods-use-parser :com.gigamonkeys.parser
-	#+periods-use-series :series)
+	#+periods-use-series :series
+	#+periods-use-parser :com.gigamonkeys.parser)
   (:nicknames :time-periods)
   (:export leapp
 	   current-year
@@ -172,6 +178,40 @@
 		  (return))
 	     (setf month 1)))
 	(encode-local-time ms ss mm hh day month year))))
+
+(declaim (inline year-of
+		 quarter-of
+		 month-of
+		 day-of
+		 hour-of
+		 minute-of
+		 second-of
+		 millisecond-of))
+
+(defun year-of (fixed-time)
+  (nth-value 6 (decode-local-time fixed-time)))
+(defun month-of (fixed-time)
+  (nth-value 5 (decode-local-time fixed-time)))
+(defun day-of (fixed-time)
+  (nth-value 4 (decode-local-time fixed-time)))
+(defun hour-of (fixed-time)
+  (nth-value 3 (decode-local-time fixed-time)))
+(defun minute-of (fixed-time)
+  (nth-value 2 (decode-local-time fixed-time)))
+(defun second-of (fixed-time)
+  (nth-value 1 (decode-local-time fixed-time)))
+(defun millisecond-of (fixed-time)
+  (nth-value 0 (decode-local-time fixed-time)))
+
+(declaim (inline day-of-week))
+(defun day-of-week (fixed-time)
+  (declare (type fixed-time fixed-time))
+  (nth-value 7 (decode-local-time fixed-time)))
+
+(declaim (inline falls-on-weekend-p))
+(defun falls-on-weekend-p (fixed-time)
+  (let ((dow (day-of-week fixed-time)))
+    (or (= 0 dow) (= 6 dow))))
 
 ;;;_ * DURATION
 
@@ -448,10 +488,11 @@
 		       (if inclusive-p
 			   `(local-time> time ,end)
 			   `(local-time>= time ,end)))))))
-    `(let ((generator (time-generator ,start ,duration :reverse ,reverse)))
+    `(let ((generator-func (time-generator ,start ,duration :reverse ,reverse)))
        ,(if test-func
-	    `(series:scan-fn 'fixed-time generator generator ,test-func)
-	    '(series:scan-fn 'fixed-time generator generator)))))
+	    `(series:scan-fn 'fixed-time generator-func generator-func
+			     ,test-func)
+	    '(series:scan-fn 'fixed-time generator-func generator-func)))))
 
 (defmacro loop-times (forms start duration end
 		      &key (reverse nil) (inclusive-p nil))
@@ -554,19 +595,19 @@
      (error "`enclosing-duration' has failed."))))
 
 ;; jww (2007-11-18): The following bug occurs:
-;;   (next-time (relative-time :month 2 :day 29) :anchor @2008-04-01)
+;;   (next-time (relative-time :month 2 :day 29) @2008-04-01)
 ;;     => @2009-03-29T00:33:08.004
 
 ;; jww (2007-11-18): There appears to be a bug in local-time itself:
 ;;   (local-time:parse-timestring "2008-02-29T00:00:00.000")
 ;;     => @2008-03-01T00:00:00.000
-(defun next-time (relative-time &key (anchor nil) (reverse nil))
+(defun next-time (anchor relative-time &key (reverse nil) (accept-anchor nil))
   "Compute the first time after FIXED-TIME which matches RELATIVE-TIME.
 
   This function finds the first moment after FIXED-TIME which honors every
   element in RELATIVE-TIME:
 
-    (next-time (relative-time :month 3) @2007-05-20) => @2008-03-20
+    (next-time @2007-05-20 (relative-time :month 3)) => @2008-03-20
 
   The relative time constructor arguments may also be symbolic:
 
@@ -578,7 +619,7 @@
   and `ADD-TIME' must be used, since \"next February\" is a relative time
   concept, while \"two weeks\" is a duration concept:
 
-    (add-time (next-time (relative-time :month 2) @2007-05-20)
+    (add-time (next-time @2007-05-20 (relative-time :month 2))
               (duration :days 14))
 
   NOTE: The keyword arguments to `RELATIVE-TIME' are always singular; those to
@@ -586,21 +627,21 @@
 
   The following form resolves to the first sunday of the given year:
 
-    (next-time (previous-time (relative-time :month 1 :day 1) 
-                              @2007-05-20)
+    (next-time (previous-time @2007-05-20 
+                              (relative-time :month 1 :day 1))
                (relative-time :week-day 0))
 
   This form finds the first Friday the 13th after today:
 
-    (next-time (relative-time :day 13 :day-of-week 5) @2007-05-20)
+    (next-time @2007-05-20 (relative-time :day 13 :day-of-week 5))
 
   NOTE: When adding times, `NEXT-TIME' always seeks the next time that fully
   honors your request.  If asked for Feb 29, the year of the resulting time
   will fall in a leap year.  If asked for Thu, Apr 29, it returns the next
   occurrence of Apr 29 which falls on a Friday.  Example:
 
-    (next-time (relative-time :month 4 :day 29 :day-of-week 4)
-               @2007-11-01)
+    (next-time @2007-11-01
+               (relative-time :month 4 :day 29 :day-of-week 4))
       => @2010-04-29T00:00:00.000"
   (declare (type (or fixed-time null) anchor))
   (declare (type relative-time relative-time))
@@ -710,7 +751,8 @@
 
 	(setf new-time (encode-local-time ms ss mm hh day month year))
 
-	(if (local-time= new-time anchor)
+	(if (and (not accept-anchor)
+		 (local-time= new-time anchor))
 	    (progn
 	      (format t "forced to loop~%")
 	      (setf anchor
@@ -719,32 +761,30 @@
 	    (return new-time))))))
 
 (declaim (inline previous-time))
-(defun previous-time (relative-time &key (anchor nil))
+(defun previous-time (anchor relative-time)
   "This function is the reverse of `NEXT-TIME'.  Please look there for more."
-  (next-time relative-time :anchor anchor :reverse t))
+  (next-time anchor relative-time :reverse t))
 
-(defun relative-time-stepper (relative-time
-			      &key (anchor nil) (reverse nil))
+(defun relative-time-stepper (anchor relative-time &key (reverse nil))
   (declare (type relative-time relative-time))
   (declare (type (or fixed-time null) anchor))
   (declare (type boolean reverse))
   (lambda (time)
-    (next-time relative-time :anchor time :reverse reverse)))
+    (next-time time relative-time :reverse reverse)))
 
 (declaim (inline relative-time-generator))
-(defun relative-time-generator (relative-time
-				&key (anchor nil) (reverse nil))
+(defun relative-time-generator (anchor relative-time &key (reverse nil))
   (declare (type relative-time relative-time))
   (declare (type (or fixed-time null) anchor))
   (declare (type boolean reverse))
   (let (next)
     (lambda (&rest args)
       (declare (ignore args))
-      (setf next (next-time relative-time :anchor (or next anchor)
+      (setf next (next-time (or next anchor) relative-time
 			    :reverse reverse)))))
 
-(defmacro map-relative-times (callable relative-time end
-			      &key (anchor nil) (reverse nil) (inclusive-p))
+(defmacro map-relative-times (callable relative-time end anchor
+			      &key (reverse nil) (inclusive-p))
   (let ((generator-sym (gensym))
 	(value-sym (gensym)))
     `(progn
@@ -754,8 +794,7 @@
 			   'local-time<) ,anchor ,end)))
        (loop
 	  with ,generator-sym =
-	  (relative-time-generator relative-time
-				   :anchor ,anchor
+	  (relative-time-generator relative-time ,anchor
 				   :reverse ,reverse)
 	  for ,value-sym = (funcall ,generator-sym)
 	  while ,(if reverse
@@ -774,14 +813,12 @@
   The disadvantage to `DO-RELATIVE-TIMES' is that there is no way to ask for a
   reversed time sequence, or specify an inclusive endpoint."
   `(block nil
-     ,(map-relative-times `#'(lambda (,var) ,@body) relative-time end
-			  :anchor anchor)
+     ,(map-relative-times `#'(lambda (,var) ,@body) relative-time anchor end)
      ,result))
 
 #+periods-use-series
-(defmacro scan-relative-times (relative-time
-			       &key (end nil) (anchor nil)
-			       (reverse nil) (inclusive-p))
+(defmacro scan-relative-times (relative-time anchor
+			       &key (end nil) (reverse nil) (inclusive-p))
   (let ((test-func
 	 (if end
 	     `#'(lambda (time)
@@ -792,131 +829,110 @@
 		       (if inclusive-p
 			   `(local-time> time ,end)
 			   `(local-time>= time ,end)))))))
-    `(let ((generator (relative-time-generator ,relative-time
-					       :anchor ,anchor
-					       :reverse ,reverse)))
+    `(let ((generator-func (relative-time-generator ,relative-time ,anchor
+						    :reverse ,reverse)))
        ,(if test-func
-	    `(series:scan-fn 'fixed-time generator generator ,test-func)
-	    '(series:scan-fn 'fixed-time generator generator)))))
+	    `(series:scan-fn 'fixed-time generator-func generator-func
+			     ,test-func)
+	    '(series:scan-fn 'fixed-time generator-func generator-func)))))
 
 ;; These routines return the present time if it matches
-(defun next-monday (&key (anchor nil) (reverse nil))
-  (next-time (relative-time :day-of-week 1)
-	     :anchor anchor :reverse reverse))
-(defun next-tuesday (&key (anchor nil) (reverse nil))
-  (next-time (relative-time :day-of-week 2)
-	     :anchor anchor :reverse reverse))
-(defun next-wednesday (&key (anchor nil) (reverse nil))
-  (next-time (relative-time :day-of-week 3)
-	     :anchor anchor :reverse reverse))
-(defun next-thursday (&key (anchor nil) (reverse nil))
-  (next-time (relative-time :day-of-week 4)
-	     :anchor anchor :reverse reverse))
-(defun next-friday (&key (anchor nil) (reverse nil))
-  (next-time (relative-time :day-of-week 5)
-	     :anchor anchor :reverse reverse))
-(defun next-saturday (&key (anchor nil) (reverse nil))
-  (next-time (relative-time :day-of-week 6)
-	     :anchor anchor :reverse reverse))
-(defun next-sunday (&key (anchor nil) (reverse nil))
-  (next-time (relative-time :day-of-week 0)
-	     :anchor anchor :reverse reverse))
+(defun next-monday (anchor &key (reverse nil))
+  (next-time anchor (relative-time :day-of-week 1) :reverse reverse))
+(defun next-tuesday (anchor &key (reverse nil))
+  (next-time anchor (relative-time :day-of-week 2) :reverse reverse))
+(defun next-wednesday (anchor &key (reverse nil))
+  (next-time anchor (relative-time :day-of-week 3) :reverse reverse))
+(defun next-thursday (anchor &key (reverse nil))
+  (next-time anchor (relative-time :day-of-week 4) :reverse reverse))
+(defun next-friday (anchor &key (reverse nil))
+  (next-time anchor (relative-time :day-of-week 5) :reverse reverse))
+(defun next-saturday (anchor &key (reverse nil))
+  (next-time anchor (relative-time :day-of-week 6) :reverse reverse))
+(defun next-sunday (anchor &key (reverse nil))
+  (next-time anchor (relative-time :day-of-week 0) :reverse reverse))
 
-(defun year-begin (&key (anchor nil))
-  (previous-time (relative-time :month 1 :day 1 :hour 0
-				:minute 0 :second 0
-				:millisecond 0)
-		 :anchor anchor))
-(defun quarter-begin (&key (anchor nil)))
-(defun month-begin (&key (anchor nil))
-  (previous-time (relative-time :day 1 :hour 0
-				:minute 0 :second 0
-				:millisecond 0)
-		 :anchor anchor))
-(defun sunday-week-begin (&key (anchor nil))
-  (previous-time (relative-time :day-of-week 0 :hour 0
-				:minute 0 :second 0
-				:millisecond 0)
-		 :anchor anchor))
-(defun monday-week-begin (&key (anchor nil))
-  (previous-time (relative-time :day-of-week 1 :hour 0
-				:minute 0 :second 0
-				:millisecond 0)
-		 :anchor anchor))
-(defun day-begin (&key (anchor nil))
-  (previous-time (relative-time :hour 0 :minute 0 :second 0
-				:millisecond 0)
-		 :anchor anchor))
-(defun hour-begin (&key (anchor nil))
-  (previous-time (relative-time :minute 0 :second 0
-				:millisecond 0)
-		 :anchor anchor))
-(defun minute-begin (&key (anchor nil))
-  (previous-time (relative-time :second 0 :millisecond 0)
-		 :anchor anchor))
-(defun second-begin (&key (anchor nil))
-  (previous-time (relative-time :millisecond 0)
-		 :anchor anchor))
+(defun year-begin (anchor)
+  (previous-time anchor (relative-time :month 1 :day 1 :hour 0
+				       :minute 0 :second 0
+				       :millisecond 0)))
+(defun quarter-begin (anchor))
+(defun month-begin (anchor)
+  (previous-time anchor (relative-time :day 1 :hour 0
+				       :minute 0 :second 0
+				       :millisecond 0)))
+(defun sunday-week-begin (anchor)
+  (previous-time anchor (relative-time :day-of-week 0 :hour 0
+				       :minute 0 :second 0
+				       :millisecond 0)))
+(defun monday-week-begin (anchor)
+  (previous-time anchor (relative-time :day-of-week 1 :hour 0
+				       :minute 0 :second 0
+				       :millisecond 0)))
+(defun day-begin (anchor)
+  (previous-time anchor (relative-time :hour 0 :minute 0 :second 0
+				       :millisecond 0)))
+(defun hour-begin (anchor)
+  (previous-time anchor (relative-time :minute 0 :second 0
+				       :millisecond 0)))
+(defun minute-begin (anchor)
+  (previous-time anchor (relative-time :second 0 :millisecond 0)))
+(defun second-begin (anchor)
+  (previous-time anchor (relative-time :millisecond 0)))
 
-(defun year-end (&key (anchor nil) (inclusive-p nil))
-  (let ((time (next-time (relative-time :month 1
-					:day 1
-					:hour 0
-					:minute 0
-					:second 0
-					:millisecond 0)
-			 :anchor anchor)))
+(defun year-end (anchor &key (inclusive-p nil))
+  (let ((time (next-time anchor (relative-time :month 1
+					       :day 1
+					       :hour 0
+					       :minute 0
+					       :second 0
+					       :millisecond 0))))
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
-(defun quarter-end (&key (anchor nil) (inclusive-p nil)))
-(defun month-end (&key (anchor nil) (inclusive-p nil))
-  (let ((time (next-time (relative-time :day 1
-					:hour 0
-					:minute 0
-					:second 0
-					:millisecond 0)
-			 :anchor anchor)))
+(defun quarter-end (anchor &key (inclusive-p nil)))
+(defun month-end (anchor &key (inclusive-p nil))
+  (let ((time (next-time anchor (relative-time :day 1
+					       :hour 0
+					       :minute 0
+					       :second 0
+					       :millisecond 0))))
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
-(defun sunday-week-end (&key (anchor nil) (inclusive-p nil))
-  (let ((time (next-sunday :anchor anchor)))
+(defun sunday-week-end (anchor &key (inclusive-p nil))
+  (let ((time (next-sunday anchor)))
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
-(defun monday-week-end (&key (anchor nil) (inclusive-p nil))
-  (let ((time (next-monday :anchor anchor)))
+(defun monday-week-end (anchor &key (inclusive-p nil))
+  (let ((time (next-monday anchor)))
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
-(defun day-end (&key (anchor nil) (inclusive-p nil))
-  (let ((time (next-time (relative-time :hour 0
-					:minute 0
-					:second 0
-					:millisecond 0)
-			 :anchor anchor)))
+(defun day-end (anchor &key (inclusive-p nil))
+  (let ((time (next-time anchor (relative-time :hour 0
+					       :minute 0
+					       :second 0
+					       :millisecond 0))))
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
-(defun hour-end (&key (anchor nil) (inclusive-p nil))
-  (let ((time (next-time (relative-time :minute 0
-					:second 0
-					:millisecond 0)
-			 :anchor anchor)))
+(defun hour-end (anchor &key (inclusive-p nil))
+  (let ((time (next-time anchor (relative-time :minute 0
+					       :second 0
+					       :millisecond 0))))
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
-(defun minute-end (&key (anchor nil) (inclusive-p nil))
-  (let ((time (next-time (relative-time :second 0
-					:millisecond 0)
-			 :anchor anchor)))
+(defun minute-end (anchor &key (inclusive-p nil))
+  (let ((time (next-time anchor (relative-time :second 0
+					       :millisecond 0))))
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
-(defun second-end (&key (anchor nil) (inclusive-p nil))
-  (let ((time (next-time (relative-time :millisecond 0)
-			 :anchor anchor)))
+(defun second-end (anchor &key (inclusive-p nil))
+  (let ((time (next-time anchor (relative-time :millisecond 0))))
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
@@ -936,18 +952,15 @@
 (defun range-duration (range))
 (defun time-in-range-p (range))
 
-(defun millenium-of (fixed-time))
-(defun century-of (fixed-time))
-(defun decade-of (fixed-time))
-(defun year-of (fixed-time))
-(defun quarter-of (fixed-time))
-(defun month-of (fixed-time))
-(defun sunday-week-of (fixed-time))
-(defun monday-week-of (fixed-time))
-(defun day-of (fixed-time))
-(defun hour-of (fixed-time))
-(defun minute-of (fixed-time))
-(defun second-of (fixed-time))
+(defun year-range (fixed-time))
+(defun quarter-range (fixed-time))
+(defun month-range (fixed-time))
+(defun sunday-week-range (fixed-time))
+(defun monday-week-range (fixed-time))
+(defun day-range (fixed-time))
+(defun hour-range (fixed-time))
+(defun minute-range (fixed-time))
+(defun second-range (fixed-time))
 
 (defun this-millenium ())
 (defun this-century ())
@@ -1193,24 +1206,24 @@
 
 (defun time-periods (&rest time-specifiers)
   (loop
-     with generator = (apply #'time-period-generator time-specifiers)
-     for period = (multiple-value-list (funcall generator))
+     with generator-func = (apply #'time-period-generator time-specifiers)
+     for period = (multiple-value-list (funcall generator-func))
      while (car period)
      collect period))
 
 (defun map-over-time (closure &rest time-specifiers)
   (loop
-     with generator = (apply #'time-period-generator time-specifiers)
-     for period = (funcall generator)
+     with generator-func = (apply #'time-period-generator time-specifiers)
+     for period = (funcall generator-func)
      while period
      do (funcall closure period)))
 
 (defmacro do-over-time (&rest time-specifiers)
   (let ((moment (gensym)))
-    (multiple-value-bind (generator loop-words)
+    (multiple-value-bind (generator-func loop-words)
 	(eval `(time-period-generator ,@time-specifiers))
       `(loop
-	  :for ,moment = (funcall ,generator)
+	  :for ,moment = (funcall ,generator-func)
 	  :while ,moment
 	  ,@loop-words))))
 

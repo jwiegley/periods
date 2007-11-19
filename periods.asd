@@ -45,7 +45,7 @@ for diagnostic output.")
 (asdf:defsystem :periods
   :serial t
   :version #.*periods-version*
-  :depends-on (:local-time #+periods-use-parser :series)
+  :depends-on (:local-time #+periods-use-series :series)
   :components ((:file "monkey-parser")
 	       (:file "periods")
 	       #+periods-use-parser (:file "parser")))
