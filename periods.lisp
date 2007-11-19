@@ -39,8 +39,7 @@
 ;;; Commentary:
 
 ;; The PERIODS library is fully described in the PDF documentation which
-;; should have accompanied this source code.  Please refer there for complete
-;; details.
+;; accompanies this source code.  Please refer there for complete details.
 
 (declaim (optimize (debug 3) (safety 3) (speed 1) (space 0)))
 
@@ -1216,6 +1215,7 @@
 			    (previous-time (time-range-anchor range) begin)))
 		begin)
 	    (and (get-range-end range)
+		 (get-range-duration range)
 		 (setf (get-range-begin range)
 		       (subtract-time (time-range-end range)
 				      (time-range-duration range))))))))
@@ -1242,6 +1242,7 @@
 			    (next-time (time-range-anchor range) end)))
 		end)
 	    (and (get-range-begin range)
+		 (get-range-duration range)
 		 (setf (get-range-end range)
 		       (add-time (time-range-begin range)
 				 (time-range-duration range))))))))
@@ -1256,16 +1257,18 @@
 
 (defun time-range-duration (range)
   (or (get-range-duration range)
-      (setf (get-range-duration range)
-	    (time-difference
-	     (if (get-range-begin-inclusive-p range)
-		 (time-range-begin range)
-		 (add-time (time-range-begin range)
-			   (duration :milliseconds 1)))
-	     (if (get-range-end-inclusive-p range)
-		 (time-range-end range)
-		 (subtract-time (time-range-end range)
-				(duration :milliseconds 1)))))))
+      (and (time-range-begin range)
+	   (time-range-end range)
+	   (setf (get-range-duration range)
+		 (time-difference
+		  (if (get-range-begin-inclusive-p range)
+		      (get-range-begin range)
+		      (add-time (get-range-begin range)
+				(duration :milliseconds 1)))
+		  (if (get-range-end-inclusive-p range)
+		      (get-range-end range)
+		      (subtract-time (get-range-end range)
+				     (duration :milliseconds 1))))))))
 
 (defun time-range-anchor (range)
   (or (get-range-anchor range)
@@ -1425,14 +1428,57 @@
      ,result))
 
 #+periods-use-series
-(defmacro scan-time-periods (period)
-  `(map-fn '(values fixed-time fixed-time fixed-time)
-	   (time-period-generator ,period)))
+(defmacro scan-time-period (period)
+  `(multiple-value-bind
+	 (begins ends next-begins)
+       (map-fn '(values
+		 (or fixed-time null)
+		 (or fixed-time null)
+		 (or fixed-time null))
+	       (time-period-generator ,period))
+     (until-if #'null begins ends next-begins)))
 
 (defun parse-period-description (string)
   (declare (ignore string)))
 
 ;;;_ * Library functions
+
+(defun collate-in-time-period (list period &key (key #'identity))
+  "Return two series, one is a series of lists grouped by ranges within the
+  period, and the other is a series of ranges, each element of which
+  corresponds to the group elements in the same position within the first
+  series."
+  (declare (optimizable-series-function))
+  (let ((next-series (scan list)))
+    (multiple-value-bind (begins ends)
+	(scan-time-period period)
+      (choose-if
+       #'(lambda (element)
+	   (not (null element)))
+       (map-fn
+	t #'(lambda (begin end)
+	      (let* ((range (time-range :begin begin :end end))
+		     found-any
+		     (items
+		      (multiple-value-bind (matching not-matching)
+			  (split-if next-series
+				    #'(lambda (item)
+					(if (time-within-range-p
+					     (funcall key item) range)
+					    (setf found-any t))))
+			(prog1
+			    matching
+			  (setf next-series not-matching)))))
+		(when found-any
+		  (cons range items))))
+	begins ends)))))
+
+(defun sleep-until (fixed-time)
+  (let ((now (local-time:now)))
+    (when (local-time:local-time> fixed-time now)
+      (let ((duration (time-difference fixed-time now)))
+	(sleep (/ (+ (* (duration-seconds duration) 1000)
+		     (duration-milliseconds duration)) 1000))))))
 
 (provide 'periods)
 
