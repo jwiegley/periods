@@ -212,7 +212,7 @@
   (let ((dow (day-of-week fixed-time)))
     (or (= 0 dow) (= 6 dow))))
 
-;;;_ * DURATION
+;;;_ * RELATIVE-DURATION
 
 (defstruct duration
   (years 0 :type integer)
@@ -223,7 +223,8 @@
   (seconds 0 :type integer)
   (milliseconds 0 :type integer))
 
-(defmacro duration (&rest args)
+(declaim (inline duration))
+(defun duration (&rest args)
   "Create a DURATION object.
 
   One thing to note about duration: there is no way to determine the total
@@ -232,7 +233,7 @@
   in a month if you don't know which month it is?)  Therefore, those looking
   for a function like \"duration-seconds\" are really wanting to work with
   ranges, not just durations."
-  `(make-duration ,@args))
+  (apply #'make-duration args))
 
 (defmacro with-skippers (&body body)
   `(labels
@@ -364,40 +365,43 @@
   (declare (type fixed-time fixed-time))
   (declare (type duration duration))
   (declare (type boolean reverse))
-  (multiple-value-bind
-	(ms ss mm hh day month year)
-      (decode-local-time fixed-time)
-    (let ((identity (if reverse -1 1)))
-     (with-skippers
-       (if (duration-years duration)
-	   (skip-year (* identity (duration-years duration))))
-       (if (duration-months duration)
-	   (skip-month (* identity (duration-months duration))))
-       (if (duration-days duration)
-	   (skip-day (* identity (duration-days duration))))
-       (if (duration-hours duration)
-	   (skip-hour (* identity (duration-hours duration))))
-       (if (duration-minutes duration)
-	   (skip-minute (* identity (duration-minutes duration))))
-       (if (duration-seconds duration)
-	   (skip-second (* identity (duration-seconds duration))))
-       (if (duration-milliseconds duration)
-	   (skip-millisecond (* identity (duration-milliseconds duration))))))
-    (encode-local-time ms ss mm hh day month year)))
+  (if (and (zerop (duration-years duration))
+	   (zerop (duration-months duration))
+	   (zerop (duration-days duration))
+	   (zerop (duration-hours duration))
+	   (zerop (duration-minutes duration)))
+      (multiple-value-bind (quotient remainder)
+	  (floor (funcall (if reverse #'- #'+)
+			  (+ (* (unix-time fixed-time) 1000)
+			     (local-time-msec fixed-time))
+			  (+ (* (duration-seconds duration) 1000)
+			     (duration-milliseconds duration)))
+		 1000)
+	(local-time :unix quotient :msec remainder))
+      (multiple-value-bind
+	    (ms ss mm hh day month year)
+	  (decode-local-time fixed-time)
+	(let ((identity (if reverse -1 1)))
+	  (with-skippers
+	    (if (duration-years duration)
+		(skip-year (* identity (duration-years duration))))
+	    (if (duration-months duration)
+		(skip-month (* identity (duration-months duration))))
+	    (if (duration-days duration)
+		(skip-day (* identity (duration-days duration))))
+	    (if (duration-hours duration)
+		(skip-hour (* identity (duration-hours duration))))
+	    (if (duration-minutes duration)
+		(skip-minute (* identity (duration-minutes duration))))
+	    (if (duration-seconds duration)
+		(skip-second (* identity (duration-seconds duration))))
+	    (if (duration-milliseconds duration)
+		(skip-millisecond (* identity (duration-milliseconds duration))))))
+	(encode-local-time ms ss mm hh day month year))))
 
 (declaim (inline subtract-time))
 (defun subtract-time (fixed-time duration)
   (add-time fixed-time duration :reverse t))
-
-(defun bounded-subtract (left right bound)
-  "A bounded subtraction operator.  Returns: VALUE CARRY."
-  (assert (< left bound))
-  (multiple-value-bind (quotient remainder)
-      (floor right bound)
-    (if (>= left remainder)
-	(values (- left remainder) quotient)
-	(values (+ left (- bound remainder))
-		(+ 1 quotient)))))
 
 (defun bounded-add (left right bound)
   "A bounded addition operator.  Returns: VALUE CARRY."
@@ -410,171 +414,71 @@
 	  (values (- (+ left remainder) bound)
 		  (+ 1 quotient))))))
 
-(defun subtract-years (duration years)
-  (if (or (>= (duration-years duration) years)
-	  (zerop years))
-      (progn
-	(decf (duration-years duration) years)
-	duration)
-      (error "Reducing duration by given amount results in a negative value")))
+(defun bounded-subtract (left right bound)
+  "A bounded subtraction operator.  Returns: VALUE CARRY."
+  (assert (< left bound))
+  (multiple-value-bind (quotient remainder)
+      (floor right bound)
+    (if (>= left remainder)
+	(values (- left remainder) quotient)
+	(values (+ left (- bound remainder))
+		(+ 1 quotient)))))
 
+(declaim (inline add-years subtract-years))
 (defun add-years (duration years)
   (incf (duration-years duration) years)
   duration)
-
-(defun subtract-months (duration months)
-  (multiple-value-bind (amount carry)
-      (bounded-subtract (duration-months duration) months 12)
-    (prog1
-	(setf (duration-months duration) amount)
-      (if (plusp carry)
-	  (subtract-years duration carry))))
+(defun subtract-years (duration years)
+  (decf (duration-years duration) years)
   duration)
 
+(declaim (inline add-months subtract-months))
 (defun add-months (duration months)
-  (multiple-value-bind (amount carry)
-      (bounded-add (duration-months duration) months 12)
-    (prog1
-	(setf (duration-months duration) amount)
-      (if (plusp carry)
-	  (add-years duration carry))))
+  (incf (duration-months duration) months)
+  duration)
+(defun subtract-months (duration months)
+  (decf (duration-months duration) months)
   duration)
 
-(defun subtract-days (duration days reference-month reference-year)
-  "Subtract a quantity of DAYS from DURATION.
+(declaim (inline add-days subtract-days))
+(defun add-days (duration days)
+  (incf (duration-days duration) days)
+  duration)
+(defun subtract-days (duration days)
+  (decf (duration-days duration) days)
+  duration)
 
-  This routine is complicated because of what should be done if the number of
-  days removed is greater than the number of days in the duration.  In that
-  case, we need to decrease the number of months -- but who's to say what the
-  size of a month is?  For that reason, using this routine requires passing
-  the REFERENCE-MONTH and REFERENCE-YEAR that the duration indicates.
+(declaim (inline add-hours subtract-hours))
+(defun add-hours (duration hours)
+  (incf (duration-hours duration) hours)
+  duration)
+(defun subtract-hours (duration hours)
+  (decf (duration-hours duration) hours)
+  duration)
 
-  That is, if a difference was computed between two dates, B and E, and E was
-  later than B, then E is considered the reference date for the duration.  If
-  the same number of days as exists between B and E is subtracted from the
-  duration that represents their difference, the date B is recovered."
-  (do () ((zerop days))
-    (let ((current-days (duration-days duration)))
-      (if (> days current-days)
-	  (progn
-	    (setf days (- days current-days))
-	    (if (= reference-month 1)
-		(setf reference-month 12
-		      reference-year (1- reference-year))
-		(decf reference-month)))
-	  (setf current-days days days 0))
-      (multiple-value-bind (amount carry)
-	  (bounded-subtract (duration-days duration) current-days
-			    (days-in-month reference-month reference-year))
-	(prog1
-	    (setf (duration-days duration) amount)
-	  (if (plusp carry)
-	      (subtract-months duration carry))))))
-  (values duration reference-month reference-year))
+(declaim (inline add-minutes subtract-minutes))
+(defun add-minutes (duration minutes)
+  (incf (duration-minutes duration) minutes)
+  duration)
+(defun subtract-minutes (duration minutes)
+  (decf (duration-minutes duration) minutes)
+  duration)
 
-(defun add-days (duration days reference-month reference-year)
-  (do () ((zerop days))
-    (let* ((current-days (duration-days duration))
-	   (days-in-month (days-in-month reference-month reference-year))
-	   (remaining (1+ (- days-in-month current-days))))
-      (if (> days remaining)
-	  (progn
-	    (setf days (- days remaining))
-	    (if (= reference-month 12)
-		(setf reference-month 1
-		      reference-year (1+ reference-year))
-		(incf reference-month)))
-	  (setf remaining days days 0))
-      (multiple-value-bind (amount carry)
-	  (bounded-add (duration-days duration) remaining
-		       days-in-month)
-	(prog1
-	    (setf (duration-days duration) amount)
-	  (if (plusp carry)
-	      (add-months duration carry))))))
-  (values duration reference-month reference-year))
+(declaim (inline add-seconds subtract-seconds))
+(defun add-seconds (duration seconds)
+  (incf (duration-seconds duration) seconds)
+  duration)
+(defun subtract-seconds (duration seconds)
+  (decf (duration-seconds duration) seconds)
+  duration)
 
-(defun subtract-hours (duration hours reference-month reference-year)
-  (multiple-value-bind (amount carry)
-      (bounded-subtract (duration-hours duration) hours 24)
-    (prog1
-	(setf (duration-hours duration) amount)
-      (if (plusp carry)
-	  (multiple-value-setq (duration reference-month reference-year)
-	    (subtract-days duration carry reference-month reference-year)))))
-  (values duration reference-month reference-year))
-
-(defun add-hours (duration hours reference-month reference-year)
-  (multiple-value-bind (amount carry)
-      (bounded-add (duration-hours duration) hours 24)
-    (prog1
-	(setf (duration-hours duration) amount)
-      (if (plusp carry)
-	  (multiple-value-setq (duration reference-month reference-year)
-	    (add-days duration carry reference-month reference-year)))))
-  (values duration reference-month reference-year))
-
-(defun subtract-minutes (duration minutes reference-month reference-year)
-  (multiple-value-bind (amount carry)
-      (bounded-subtract (duration-minutes duration) minutes 60)
-    (prog1
-	(setf (duration-minutes duration) amount)
-      (if (plusp carry)
-	  (multiple-value-setq (duration reference-month reference-year)
-	    (subtract-hours duration carry reference-month reference-year)))))
-  (values duration reference-month reference-year))
-
-(defun add-minutes (duration minutes reference-month reference-year)
-  (multiple-value-bind (amount carry)
-      (bounded-add (duration-minutes duration) minutes 60)
-    (prog1
-	(setf (duration-minutes duration) amount)
-      (if (plusp carry)
-	  (multiple-value-setq (duration reference-month reference-year)
-	    (add-hours duration carry reference-month reference-year)))))
-  (values duration reference-month reference-year))
-
-(defun subtract-seconds (duration seconds reference-month reference-year)
-  (multiple-value-bind (amount carry)
-      (bounded-subtract (duration-seconds duration) seconds 60)
-    (prog1
-	(setf (duration-seconds duration) amount)
-      (if (plusp carry)
-	  (multiple-value-setq (duration reference-month reference-year)
-	    (subtract-minutes duration carry reference-month reference-year)))))
-  (values duration reference-month reference-year))
-
-(defun add-seconds (duration seconds reference-month reference-year)
-  (multiple-value-bind (amount carry)
-      (bounded-add (duration-seconds duration) seconds 60)
-    (prog1
-	(setf (duration-seconds duration) amount)
-      (if (plusp carry)
-	  (multiple-value-setq (duration reference-month reference-year)
-	    (add-minutes duration carry reference-month reference-year)))))
-  (values duration reference-month reference-year))
-
-(defun subtract-milliseconds (duration milliseconds
-			      reference-month reference-year)
-  (multiple-value-bind (amount carry)
-      (bounded-subtract (duration-milliseconds duration) milliseconds 1000)
-    (prog1
-	(setf (duration-milliseconds duration) amount)
-      (if (plusp carry)
-	  (multiple-value-setq (duration reference-month reference-year)
-	    (subtract-seconds duration carry reference-month reference-year)))))
-  (values duration reference-month reference-year))
-
-(defun add-milliseconds (duration milliseconds
-			 reference-month reference-year)
-  (multiple-value-bind (amount carry)
-      (bounded-add (duration-milliseconds duration) milliseconds 1000)
-    (prog1
-	(setf (duration-milliseconds duration) amount)
-      (if (plusp carry)
-	  (multiple-value-setq (duration reference-month reference-year)
-	    (add-seconds duration carry reference-month reference-year)))))
-  (values duration reference-month reference-year))
+(declaim (inline add-milliseconds subtract-milliseconds))
+(defun add-milliseconds (duration milliseconds)
+  (incf (duration-milliseconds duration) milliseconds)
+  duration)
+(defun subtract-milliseconds (duration milliseconds)
+  (decf (duration-milliseconds duration) milliseconds)
+  duration)
 
 (defun time-difference (left right)
   "Compute the duration existing between fixed-times LEFT and RIGHT.
@@ -595,92 +499,45 @@
   in reckoning can be tricky, however, so bear this in mind.a"
   (if (local-time< left right)
       (rotatef left right))
-  (multiple-value-bind
-	(l-ms l-ss l-mm l-hh l-day l-month l-year)
-      (decode-local-time left)
-    (let ((duration
-	   (duration :years l-year
-		     :months l-month
-		     :days l-day
-		     :hours l-hh
-		     :minutes l-mm
-		     :seconds l-ss
-		     :milliseconds l-ms)))
-      (multiple-value-bind
-	    (r-ms r-ss r-mm r-hh r-day r-month r-year)
-	  (decode-local-time right)
-	(subtract-years duration r-year)
-	(subtract-months duration r-month)
-	(let ((ref-month r-month)
-	      (ref-year r-year))
-	  (multiple-value-setq (duration ref-month ref-year)
-	    (subtract-days duration r-day ref-month ref-year))
-	  (multiple-value-setq (duration ref-month ref-year)
-	    (subtract-hours duration r-hh ref-month ref-year))
-	  (multiple-value-setq (duration ref-month ref-year)
-	    (subtract-minutes duration r-mm ref-month ref-year))
-	  (multiple-value-setq (duration ref-month ref-year)
-	    (subtract-seconds duration r-ss ref-month ref-year))
-	  (multiple-value-setq (duration ref-month ref-year)
-	    (subtract-milliseconds duration r-ms ref-month ref-year)))))))
+  (let ((msec (- (local-time-msec left) (local-time-msec right)))
+	(sec (- (universal-time left) (universal-time right))))
+    (if (minusp msec)
+	(decf sec))
+    (duration :seconds sec :milliseconds msec)))
 
-(defun add-duration (left right reference-month reference-year)
+(defun add-duration (left right)
   "Add one duration to another."
-  (let ((tmp (duration :years (duration-years left)
-		       :months (duration-months left)
-		       :days (duration-days left)
-		       :hours (duration-hours left)
-		       :minutes (duration-minutes left)
-		       :seconds (duration-seconds left)
-		       :milliseconds (duration-milliseconds left))))
-    (add-years tmp (duration-years right))
-    (add-months tmp (duration-months right))
-    (multiple-value-setq (tmp reference-month reference-year)
-      (add-days tmp (duration-days right)
-		reference-month reference-year))
-    (multiple-value-setq (tmp reference-month reference-year)
-      (add-hours tmp (duration-hours right)
-		 reference-month reference-year))
-    (multiple-value-setq (tmp reference-month reference-year)
-      (add-minutes tmp (duration-minutes right)
-		   reference-month reference-year))
-    (multiple-value-setq (tmp reference-month reference-year)
-      (add-seconds tmp (duration-seconds right)
-		   reference-month reference-year))
-    (multiple-value-setq (tmp reference-month reference-year)
-      (add-milliseconds tmp (duration-milliseconds right)
-			reference-month reference-year))
-    tmp))
+  (duration :years (+ (duration-years left)
+		      (duration-years right))
+	    :months (+ (duration-months left)
+		       (duration-months right))
+	    :days (+ (duration-days left)
+		     (duration-days right))
+	    :hours (+ (duration-hours left)
+		      (duration-hours right))
+	    :minutes (+ (duration-minutes left)
+			(duration-minutes right))
+	    :seconds (+ (duration-seconds left)
+			(duration-seconds right))
+	    :milliseconds (+ (duration-milliseconds left)
+			     (duration-milliseconds right))))
 
-(defun subtract-duration (left right reference-month reference-year)
-  "Subtract one duration from another.
-
-  This operation is valid only if LEFT is larger than RIGHT."
-  (let ((tmp (duration :years (duration-years left)
-		       :months (duration-months left)
-		       :days (duration-days left)
-		       :hours (duration-hours left)
-		       :minutes (duration-minutes left)
-		       :seconds (duration-seconds left)
-		       :milliseconds (duration-milliseconds left))))
-    (subtract-years tmp (duration-years right))
-    (subtract-months tmp (duration-months right))
-    (multiple-value-setq (tmp reference-month reference-year)
-      (subtract-days tmp (duration-days right)
-		     reference-month reference-year))
-    (multiple-value-setq (tmp reference-month reference-year)
-      (subtract-hours tmp (duration-hours right)
-		      reference-month reference-year))
-    (multiple-value-setq (tmp reference-month reference-year)
-      (subtract-minutes tmp (duration-minutes right)
-			reference-month reference-year))
-    (multiple-value-setq (tmp reference-month reference-year)
-      (subtract-seconds tmp (duration-seconds right)
-			reference-month reference-year))
-    (multiple-value-setq (tmp reference-month reference-year)
-      (subtract-milliseconds tmp (duration-milliseconds right)
-			     reference-month reference-year))
-    tmp))
+(defun subtract-duration (left right)
+  "Subtract one duration from another."
+  (duration :years (- (duration-years left)
+		      (duration-years right))
+	    :months (- (duration-months left)
+		       (duration-months right))
+	    :days (- (duration-days left)
+		     (duration-days right))
+	    :hours (- (duration-hours left)
+		      (duration-hours right))
+	    :minutes (- (duration-minutes left)
+			(duration-minutes right))
+	    :seconds (- (duration-seconds left)
+			(duration-seconds right))
+	    :milliseconds (- (duration-milliseconds left)
+			     (duration-milliseconds right))))
 
 (declaim (inline time-stepper))
 (defun time-stepper (duration &key (reverse nil))
@@ -791,8 +648,9 @@
   (second nil :type (or keyword integer null))
   (millisecond nil :type (or keyword integer null)))
 
-(defmacro relative-time (&rest args)
-  `(make-relative-time ,@args))
+(declaim (inline relative-time))
+(defun relative-time (&rest args)
+  (apply #'make-relative-time args))
 
 (declaim (inline range-dec))
 (defun range-dec (value min max)
@@ -855,7 +713,8 @@
        (or (not (relative-time-day-of-week relative-time))
 	   (= day-of-week (relative-time-day-of-week relative-time)))))
 
-(defmacro matches-relative-time-p (fixed-time relative-time)
+(declaim (inline matches-relative-time-p))
+(defun matches-relative-time-p (fixed-time relative-time)
   "Return T if the given FIXED-TIME honors the details in RELATIVE-TIME."
   `(details-match-relative-time-p
     ,@(multiple-value-list (decode-local-time fixed-time)) ,relative-time))
@@ -1356,8 +1215,9 @@
   (duration nil)
   (anchor nil))
 
-(defmacro time-range (&rest args)
-  `(make-time-range ,@args))
+(declaim (inline time-range))
+(defun time-range (&rest args)
+  (apply #'make-time-range args))
 
 (defun time-range-begin (range &optional time)
   (if time
@@ -1413,22 +1273,25 @@
 
 (defun time-range-duration (range)
   (or (get-range-duration range)
-      (let ((duration
-	     (time-difference (time-range-begin range)
-			      (time-range-end range)))
-	    (addend 0))
-	(unless (get-range-begin-inclusive-p range)
-	  (incf addend))
-	(unless (get-range-end-inclusive-p range)
-	  (incf addend))
-	(subtract-milliseconds duration addend
-			       (month-of (get-range-end range))
-			       (year-of (get-range-end range)))
-	(setf (get-range-duration range)
-	      duration))))
+      (setf (get-range-duration range)
+	    (time-difference
+	     (if (get-range-begin-inclusive-p range)
+		 (time-range-begin range)
+		 (add-time (time-range-begin range)
+			   (duration :milliseconds 1)))
+	     (if (get-range-end-inclusive-p range)
+		 (time-range-end range)
+		 (subtract-time (time-range-end range)
+				(duration :milliseconds 1)))))))
 
 (defun time-range-anchor (range)
   (or (get-range-anchor range)
+      (and (get-range-begin range)
+	   (not (typep (get-range-begin range) 'relative-time))
+	   (setf (get-range-anchor range) (get-range-begin range)))
+      (and (get-range-end range)
+	   (not (typep (get-range-end range) 'relative-time))
+	   (setf (get-range-anchor range) (get-range-end range)))
       (setf (get-range-anchor range) (local-time:now))))
 
 (defun time-within-range-p (fixed-time range)
@@ -1443,34 +1306,65 @@
 		 (local-time<= fixed-time end)
 		 (local-time< fixed-time end))))))
 
-(defun year-range (fixed-time)
-  (declare (ignore fixed-time)))
-(defun month-range (fixed-time)
-  (declare (ignore fixed-time)))
-(defun sunday-week-range (fixed-time)
-  (declare (ignore fixed-time)))
-(defun monday-week-range (fixed-time)
-  (declare (ignore fixed-time)))
-(defun day-range (fixed-time)
-  (declare (ignore fixed-time)))
-(defun hour-range (fixed-time)
-  (declare (ignore fixed-time)))
-(defun minute-range (fixed-time)
-  (declare (ignore fixed-time)))
-(defun second-range (fixed-time)
-  (declare (ignore fixed-time)))
+(defun year-range (fixed-time &key (begin-inclusive-p t)
+		   (end-inclusive-p nil))
+  (time-range :begin (year-begin fixed-time) :end (next-year fixed-time)
+	      :begin-inclusive-p begin-inclusive-p
+	      :end-inclusive-p end-inclusive-p))
+(defun month-range (fixed-time &key (begin-inclusive-p t)
+		   (end-inclusive-p nil))
+  (time-range :begin (month-begin fixed-time) :end (next-month fixed-time)
+	      :begin-inclusive-p begin-inclusive-p
+	      :end-inclusive-p end-inclusive-p))
+(defun sunday-week-range (fixed-time &key (begin-inclusive-p t)
+		   (end-inclusive-p nil))
+  (time-range :begin (sunday-week-begin fixed-time)
+	      :end (next-sunday-week fixed-time)
+	      :begin-inclusive-p begin-inclusive-p
+	      :end-inclusive-p end-inclusive-p))
+(defun monday-week-range (fixed-time &key (begin-inclusive-p t)
+		   (end-inclusive-p nil))
+  (time-range :begin (monday-week-begin fixed-time)
+	      :end (next-monday-week fixed-time)
+	      :begin-inclusive-p begin-inclusive-p
+	      :end-inclusive-p end-inclusive-p))
+(defun day-range (fixed-time &key (begin-inclusive-p t)
+		   (end-inclusive-p nil))
+  (time-range :begin (day-begin fixed-time) :end (next-day fixed-time)
+	      :begin-inclusive-p begin-inclusive-p
+	      :end-inclusive-p end-inclusive-p))
+(defun hour-range (fixed-time &key (begin-inclusive-p t)
+		   (end-inclusive-p nil))
+  (time-range :begin (hour-begin fixed-time) :end (next-hour fixed-time)
+	      :begin-inclusive-p begin-inclusive-p
+	      :end-inclusive-p end-inclusive-p))
+(defun minute-range (fixed-time &key (begin-inclusive-p t)
+		   (end-inclusive-p nil))
+  (time-range :begin (minute-begin fixed-time) :end (next-minute fixed-time)
+	      :begin-inclusive-p begin-inclusive-p
+	      :end-inclusive-p end-inclusive-p))
+(defun second-range (fixed-time &key (begin-inclusive-p t)
+		   (end-inclusive-p nil))
+  (time-range :begin (second-begin fixed-time) :end (next-second fixed-time)
+	      :begin-inclusive-p begin-inclusive-p
+	      :end-inclusive-p end-inclusive-p))
 
-(defun this-millenium-range ())
-(defun this-century-range ())
-(defun this-decade-range ())
-(defun this-year-range ())
-(defun this-month-range ())
-(defun this-sunday-week-range ())
-(defun this-monday-week-range ())
-(defun this-day-range ())
-(defun this-hour-range ())
-(defun this-minute-range ())
-(defun this-second-range ())
+(defun this-year-range ()
+  (year-range (now)))
+(defun this-month-range ()
+  (month-range (now)))
+(defun this-sunday-week-range ()
+  (sunday-week-range (now)))
+(defun this-monday-week-range ()
+  (monday-week-range (now)))
+(defun this-day-range ()
+  (day-range (now)))
+(defun this-hour-range ()
+  (hour-range (now)))
+(defun this-minute-range ()
+  (minute-range (now)))
+(defun this-second-range ()
+  (second-range (now)))
 
 ;;;_ * PERIOD
 
