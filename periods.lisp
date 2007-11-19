@@ -1292,6 +1292,12 @@
 		 (local-time<= fixed-time end)
 		 (local-time< fixed-time end))))))
 
+(defun time-within-begin-end-p (fixed-time begin end)
+  (and (or (null begin)
+	   (local-time>= fixed-time begin))
+       (or (null end)
+	   (local-time< fixed-time end))))
+
 (defun year-range (fixed-time &key (begin-inclusive-p t)
 		   (end-inclusive-p nil))
   (time-range :begin (year-begin fixed-time) :end (next-year fixed-time)
@@ -1452,26 +1458,20 @@
   (let ((next-series (scan list)))
     (multiple-value-bind (begins ends)
 	(scan-time-period period)
-      (choose-if
-       #'(lambda (element)
-	   (not (null element)))
-       (map-fn
-	t #'(lambda (begin end)
-	      (let* ((range (time-range :begin begin :end end))
-		     found-any
-		     (items
-		      (multiple-value-bind (matching not-matching)
-			  (split-if next-series
-				    #'(lambda (item)
-					(if (time-within-range-p
-					     (funcall key item) range)
-					    (setf found-any t))))
-			(prog1
-			    matching
-			  (setf next-series not-matching)))))
-		(when found-any
-		  (cons range items))))
-	begins ends)))))
+      (map-fn
+       t #'(lambda (begin end)
+	     (let ((items
+		    (multiple-value-bind (matching not-matching)
+			(split-if next-series
+				  #'(lambda (item)
+				      (time-within-begin-end-p
+				       (funcall key item) begin end)))
+		      (prog1
+			  matching
+			(setf next-series not-matching)))))
+	       (values (cons begin end)
+		       items)))
+       begins ends))))
 
 (defun sleep-until (fixed-time)
   (let ((now (local-time:now)))
