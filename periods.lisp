@@ -180,7 +180,6 @@
 	(encode-local-time ms ss mm hh day month year))))
 
 (declaim (inline year-of
-		 quarter-of
 		 month-of
 		 day-of
 		 hour-of
@@ -217,7 +216,6 @@
 
 (defstruct duration
   (years nil :type (or integer null))
-  (quarters nil :type (or integer null))
   (months nil :type (or integer null))
   (days nil :type (or integer null))
   (hours nil :type (or integer null))
@@ -373,8 +371,6 @@
      (with-skippers
        (if (duration-years duration)
 	   (skip-year (* identity (duration-years duration))))
-       (if (duration-quarters duration)
-	   (skip-month (* identity (* 3 (duration-quarters duration)))))
        (if (duration-months duration)
 	   (skip-month (* identity (duration-months duration))))
        (if (duration-days duration)
@@ -393,11 +389,192 @@
 (defun subtract-time (fixed-time duration)
   (add-time fixed-time duration :reverse t))
 
-(declaim (inline bounded-minus))
-(defun bounded-minus (left right bound &optional zero-base-p)
-  (if (< left right)
-      (+ left (+ (- bound right) (if zero-base-p 1 0)))
-      (- left right)))
+(defun bounded-subtract (left right bound)
+  "A bounded subtraction operator.  Returns: VALUE CARRY."
+  (assert (< left bound))
+  (multiple-value-bind (quotient remainder)
+      (floor right bound)
+    (if (>= left remainder)
+	(values (- left remainder) quotient)
+	(values (+ left (- bound remainder))
+		(+ 1 quotient)))))
+
+(defun bounded-add (left right bound)
+  "A bounded addition operator.  Returns: VALUE CARRY."
+  (assert (< left bound))
+  (multiple-value-bind (quotient remainder)
+      (floor right bound)
+    (let ((sum (+ left remainder)))
+      (if (< sum bound)
+	  (values sum quotient)
+	  (values (- (+ left remainder) bound)
+		  (+ 1 quotient))))))
+
+(defun subtract-years (duration years)
+  (if (or (>= (duration-years duration) years)
+	  (zerop years))
+      (progn
+	(decf (duration-years duration) years)
+	duration)
+      (error "Reducing duration by given amount results in a negative value")))
+
+(defun add-years (duration years)
+  (incf (duration-years duration) years)
+  duration)
+
+(defun subtract-months (duration months)
+  (multiple-value-bind (amount carry)
+      (bounded-subtract (duration-months duration) months 12)
+    (prog1
+	(setf (duration-months duration) amount)
+      (if (plusp carry)
+	  (subtract-years duration carry))))
+  duration)
+
+(defun add-months (duration months)
+  (multiple-value-bind (amount carry)
+      (bounded-add (duration-months duration) months 12)
+    (prog1
+	(setf (duration-months duration) amount)
+      (if (plusp carry)
+	  (add-years duration carry))))
+  duration)
+
+(defun subtract-days (duration days reference-month reference-year)
+  "Subtract a quantity of DAYS from DURATION.
+
+  This routine is complicated because of what should be done if the number of
+  days removed is greater than the number of days in the duration.  In that
+  case, we need to decrease the number of months -- but who's to say what the
+  size of a month is?  For that reason, using this routine requires passing
+  the REFERENCE-MONTH and REFERENCE-YEAR that the duration indicates.
+
+  That is, if a difference was computed between two dates, B and E, and E was
+  later than B, then E is considered the reference date for the duration.  If
+  the same number of days as exists between B and E is subtracted from the
+  duration that represents their difference, the date B is recovered."
+  (do () ((zerop days))
+    (let ((current-days (duration-days duration)))
+      (if (> days current-days)
+	  (progn
+	    (setf days (- days current-days))
+	    (if (= reference-month 1)
+		(setf reference-month 12
+		      reference-year (1- reference-year))
+		(decf reference-month)))
+	  (setf current-days days days 0))
+      (multiple-value-bind (amount carry)
+	  (bounded-subtract (duration-days duration) current-days
+			    (days-in-month reference-month reference-year))
+	(prog1
+	    (setf (duration-days duration) amount)
+	  (if (plusp carry)
+	      (subtract-months duration carry))))))
+  (values duration reference-month reference-year))
+
+(defun add-days (duration days reference-month reference-year)
+  (do () ((zerop days))
+    (let* ((current-days (duration-days duration))
+	   (days-in-month (days-in-month reference-month reference-year))
+	   (remaining (1+ (- days-in-month current-days))))
+      (if (> days remaining)
+	  (progn
+	    (setf days (- days remaining))
+	    (if (= reference-month 12)
+		(setf reference-month 1
+		      reference-year (1+ reference-year))
+		(incf reference-month)))
+	  (setf remaining days days 0))
+      (multiple-value-bind (amount carry)
+	  (bounded-add (duration-days duration) remaining
+		       days-in-month)
+	(prog1
+	    (setf (duration-days duration) amount)
+	  (if (plusp carry)
+	      (add-months duration carry))))))
+  (values duration reference-month reference-year))
+
+(defun subtract-hours (duration hours reference-month reference-year)
+  (multiple-value-bind (amount carry)
+      (bounded-subtract (duration-hours duration) hours 24)
+    (prog1
+	(setf (duration-hours duration) amount)
+      (if (plusp carry)
+	  (multiple-value-setq (duration reference-month reference-year)
+	    (subtract-days duration carry reference-month reference-year)))))
+  (values duration reference-month reference-year))
+
+(defun add-hours (duration hours reference-month reference-year)
+  (multiple-value-bind (amount carry)
+      (bounded-add (duration-hours duration) hours 24)
+    (prog1
+	(setf (duration-hours duration) amount)
+      (if (plusp carry)
+	  (multiple-value-setq (duration reference-month reference-year)
+	    (add-days duration carry reference-month reference-year)))))
+  (values duration reference-month reference-year))
+
+(defun subtract-minutes (duration minutes reference-month reference-year)
+  (multiple-value-bind (amount carry)
+      (bounded-subtract (duration-minutes duration) minutes 60)
+    (prog1
+	(setf (duration-minutes duration) amount)
+      (if (plusp carry)
+	  (multiple-value-setq (duration reference-month reference-year)
+	    (subtract-hours duration carry reference-month reference-year)))))
+  (values duration reference-month reference-year))
+
+(defun add-minutes (duration minutes reference-month reference-year)
+  (multiple-value-bind (amount carry)
+      (bounded-add (duration-minutes duration) minutes 60)
+    (prog1
+	(setf (duration-minutes duration) amount)
+      (if (plusp carry)
+	  (multiple-value-setq (duration reference-month reference-year)
+	    (add-hours duration carry reference-month reference-year)))))
+  (values duration reference-month reference-year))
+
+(defun subtract-seconds (duration seconds reference-month reference-year)
+  (multiple-value-bind (amount carry)
+      (bounded-subtract (duration-seconds duration) seconds 60)
+    (prog1
+	(setf (duration-seconds duration) amount)
+      (if (plusp carry)
+	  (multiple-value-setq (duration reference-month reference-year)
+	    (subtract-minutes duration carry reference-month reference-year)))))
+  (values duration reference-month reference-year))
+
+(defun add-seconds (duration seconds reference-month reference-year)
+  (multiple-value-bind (amount carry)
+      (bounded-add (duration-seconds duration) seconds 60)
+    (prog1
+	(setf (duration-seconds duration) amount)
+      (if (plusp carry)
+	  (multiple-value-setq (duration reference-month reference-year)
+	    (add-minutes duration carry reference-month reference-year)))))
+  (values duration reference-month reference-year))
+
+(defun subtract-milliseconds (duration milliseconds
+			      reference-month reference-year)
+  (multiple-value-bind (amount carry)
+      (bounded-subtract (duration-milliseconds duration) milliseconds 1000)
+    (prog1
+	(setf (duration-milliseconds duration) amount)
+      (if (plusp carry)
+	  (multiple-value-setq (duration reference-month reference-year)
+	    (subtract-seconds duration carry reference-month reference-year)))))
+  (values duration reference-month reference-year))
+
+(defun add-milliseconds (duration milliseconds
+			 reference-month reference-year)
+  (multiple-value-bind (amount carry)
+      (bounded-add (duration-milliseconds duration) milliseconds 1000)
+    (prog1
+	(setf (duration-milliseconds duration) amount)
+      (if (plusp carry)
+	  (multiple-value-setq (duration reference-month reference-year)
+	    (add-seconds duration carry reference-month reference-year)))))
+  (values duration reference-month reference-year))
 
 (defun time-difference (left right)
   "Compute the duration existing between fixed-times LEFT and RIGHT.
@@ -421,28 +598,43 @@
   (multiple-value-bind
 	(l-ms l-ss l-mm l-hh l-day l-month l-year)
       (decode-local-time left)
-    (multiple-value-bind
-	  (r-ms r-ss r-mm r-hh r-day r-month r-year)
-	(decode-local-time right)
-      (let ((months (bounded-minus l-month r-month 12))
-	    (days (bounded-minus l-day r-day
-				 (days-in-month (if (= 1 l-month)
-						    12
-						    (1- l-month))
-						l-year)))
-	    (hours (bounded-minus l-hh r-hh 23 t))
-	    (minutes (bounded-minus l-mm r-mm 59 t))
-	    (seconds (bounded-minus l-ss r-ss 59 t))
-	    (milliseconds (bounded-minus l-ms r-ms 999 t)))
-	(make-duration :years (if (< l-month r-month)
-				  (1- (- l-year r-year))
-				  (- l-year r-year))
-		       :months (if (< l-day r-day) (1- months) months)
-		       :days (if (< l-hh r-hh) (1- days) days)
-		       :hours (if (< l-mm r-mm) (1- hours) hours)
-		       :minutes (if (< l-ss r-ss) (1- minutes) minutes)
-		       :seconds (if (< l-ms r-ms) (1- seconds) seconds)
-		       :milliseconds milliseconds)))))
+    (let ((duration
+	   (duration :years l-year
+		     :months l-month
+		     :days l-day
+		     :hours l-hh
+		     :minutes l-mm
+		     :seconds l-ss
+		     :milliseconds l-ms)))
+      (multiple-value-bind
+	    (r-ms r-ss r-mm r-hh r-day r-month r-year)
+	  (decode-local-time right)
+	(subtract-years duration r-year)
+	(subtract-months duration r-month)
+	(let ((ref-month r-month)
+	      (ref-year r-year))
+	  (multiple-value-setq (duration ref-month ref-year)
+	    (subtract-days duration r-day ref-month ref-year))
+	  (multiple-value-setq (duration ref-month ref-year)
+	    (subtract-hours duration r-hh ref-month ref-year))
+	  (multiple-value-setq (duration ref-month ref-year)
+	    (subtract-minutes duration r-mm ref-month ref-year))
+	  (multiple-value-setq (duration ref-month ref-year)
+	    (subtract-seconds duration r-ss ref-month ref-year))
+	  (multiple-value-setq (duration ref-month ref-year)
+	    (subtract-milliseconds duration r-ms ref-month ref-year)))))))
+
+(defun add-duration (left right)
+  "Add one duration to another."
+  (declare (ignore left))
+  (declare (ignore right)))
+
+(defun subtract-duration (left right)
+  "Subtract one duration from another.
+
+  This operation is valid only if LEFT is larger than RIGHT."
+  (declare (ignore left))
+  (declare (ignore right)))
 
 (declaim (inline time-stepper))
 (defun time-stepper (duration &key (reverse nil))
@@ -544,7 +736,6 @@
 
 (defstruct relative-time
   (year nil :type (or keyword integer null))
-  (quarter nil :type (or keyword integer null))
   (month nil :type (or keyword integer null))
   (week nil :type (or keyword integer null))
   (day-of-week nil :type (or keyword integer null))
@@ -594,6 +785,35 @@
     (t
      (error "`enclosing-duration' has failed."))))
 
+(defun details-match-relative-time-p (ms ss mm hh day month year
+				      day-of-week daylight-p
+				      timezone tz-abbrev relative-time)
+  (declare (ignore daylight-p))
+  (declare (ignore timezone))
+  (declare (ignore tz-abbrev))
+  "Return T if the given time elements honor the details in RELATIVE-TIME."
+  (and (or (not (relative-time-millisecond relative-time))
+	   (= ms (relative-time-millisecond relative-time)))
+       (or (not (relative-time-second relative-time))
+	   (= ss (relative-time-second relative-time)))
+       (or (not (relative-time-minute relative-time))
+	   (= mm (relative-time-minute relative-time)))
+       (or (not (relative-time-hour relative-time))
+	   (= hh (relative-time-hour relative-time)))
+       (or (not (relative-time-day relative-time))
+	   (= day (relative-time-day relative-time)))
+       (or (not (relative-time-month relative-time))
+	   (= month (relative-time-month relative-time)))
+       (or (not (relative-time-year relative-time))
+	   (= year (relative-time-year relative-time)))
+       (or (not (relative-time-day-of-week relative-time))
+	   (= day-of-week (relative-time-day-of-week relative-time)))))
+
+(defmacro matches-relative-time-p (fixed-time relative-time)
+  "Return T if the given FIXED-TIME honors the details in RELATIVE-TIME."
+  `(details-match-relative-time-p
+    ,@(multiple-value-list (decode-local-time fixed-time)) ,relative-time))
+
 ;; jww (2007-11-18): The following bug occurs:
 ;;   (next-time (relative-time :month 2 :day 29) @2008-04-01)
 ;;     => @2009-03-29T00:33:08.004
@@ -601,7 +821,8 @@
 ;; jww (2007-11-18): There appears to be a bug in local-time itself:
 ;;   (local-time:parse-timestring "2008-02-29T00:00:00.000")
 ;;     => @2008-03-01T00:00:00.000
-(defun next-time (anchor relative-time &key (reverse nil) (accept-anchor nil))
+(defun next-time (anchor relative-time
+		  &key (reverse nil) (accept-anchor nil) (recursive-call nil))
   "Compute the first time after FIXED-TIME which matches RELATIVE-TIME.
 
   This function finds the first moment after FIXED-TIME which honors every
@@ -647,38 +868,56 @@
   (declare (type relative-time relative-time))
   (declare (type boolean reverse))
 
-  (do ((new-time anchor))
-      (nil)
+  (let ((moment (or anchor (local-time:now))))
     (multiple-value-bind
-	  (ms ss mm hh day month year)
-	(decode-local-time (or anchor (setf anchor (local-time:now))))
+	  (ms ss mm hh day month year day-of-week)
+	(decode-local-time moment)
+
+      ;; If the moment we just decoded already matches the relative-time,
+      ;; either return it immediately (if :ACCEPT-ANCHOR is T), or else
+      ;; recurse exactly one level to get the next relative time.
+      (if (and (not recursive-call)
+	       (details-match-relative-time-p ms ss mm hh day month year
+					      day-of-week nil nil nil
+					      relative-time))
+	  (return-from next-time
+	    (if accept-anchor
+		moment
+		(next-time (add-time moment
+				     (enclosing-duration relative-time)
+				     :reverse reverse)
+			   relative-time
+			   :reverse reverse
+			   :recursive-call t))))
 
       (let ((identity (if reverse -1 1))
 	    (test (if reverse #'> #'<))
 	    now-ms now-ss now-mm now-hh
 	    now-day now-month now-year now-day-of-week)
 
-	(labels ((decode-now ()
-		   (if anchor
-		       (multiple-value-setq
-			   (now-ms now-ss now-mm now-hh
-				   now-day now-month
-				   now-year now-day-of-week)
-			 (decode-local-time (local-time:now)))
-		       (setf now-ms ms
-			     now-ss ss
-			     now-mm mm
-			     now-hh hh
-			     now-day day
-			     now-month month
-			     now-year year)))
-		 (now-ms () (or now-ms (progn (decode-now) now-ms)))
-		 (now-ss () (or now-ss (progn (decode-now) now-ss)))
-		 (now-mm () (or now-mm (progn (decode-now) now-mm)))
-		 (now-hh () (or now-hh (progn (decode-now) now-hh)))
-		 (now-day () (or now-day (progn (decode-now) now-day)))
-		 (now-month () (or now-month (progn (decode-now) now-month)))
-		 (now-year () (or now-year (progn (decode-now) now-year))))
+	(labels
+	    ((decode-now ()
+	       (if anchor
+		   (multiple-value-setq
+		       (now-ms now-ss now-mm now-hh
+			       now-day now-month
+			       now-year now-day-of-week)
+		     (decode-local-time (local-time:now)))
+		   (setf now-ms ms
+			 now-ss ss
+			 now-mm mm
+			 now-hh hh
+			 now-day day
+			 now-month month
+			 now-year year)))
+	     (now-ms () (or now-ms (progn (decode-now) now-ms)))
+	     (now-ss () (or now-ss (progn (decode-now) now-ss)))
+	     (now-mm () (or now-mm (progn (decode-now) now-mm)))
+	     (now-hh () (or now-hh (progn (decode-now) now-hh)))
+	     (now-day () (or now-day (progn (decode-now) now-day)))
+	     (now-month () (or now-month (progn (decode-now) now-month)))
+	     (now-year () (or now-year (progn (decode-now) now-year))))
+
 	  (with-skippers
 	    (macrolet
 		((set-time-value (sym now-func accessor
@@ -699,9 +938,11 @@
 			      (otherwise
 			       (error "Unknown relative-time keyword for ~S: ~S"
 				      (quote ,accessor) value))))
+
 			,(if skip-function
 			     `(if (funcall test value ,sym)
 				  (,skip-function (* identity 1))))
+
 			(setf ,sym value)))))
 
 	      (set-time-value ms now-ms relative-time-millisecond 0 999
@@ -743,31 +984,22 @@
 	      (if (relative-time-day-of-week relative-time)
 		  (loop
 		     for new-time =
-		       (encode-local-time ms ss mm hh day month year)
+		     (encode-local-time ms ss mm hh day month year)
 		     for new-dow = (nth-value 7 (decode-local-time new-time))
 		     while (/= new-dow (relative-time-day-of-week
 					relative-time))
 		     do (skip-day identity))))))
 
-	(setf new-time (encode-local-time ms ss mm hh day month year))
-
-	(if (and (not accept-anchor)
-		 (local-time= new-time anchor))
-	    (progn
-	      (format t "forced to loop~%")
-	      (setf anchor
-		    (add-time anchor (enclosing-duration relative-time)
-			      :reverse reverse)))
-	    (return new-time))))))
+	(encode-local-time ms ss mm hh day month year)))))
 
 (declaim (inline previous-time))
-(defun previous-time (anchor relative-time)
+(defun previous-time (anchor relative-time &key (accept-anchor nil))
   "This function is the reverse of `NEXT-TIME'.  Please look there for more."
-  (next-time anchor relative-time :reverse t))
+  (next-time anchor relative-time :reverse t :accept-anchor accept-anchor))
 
-(defun relative-time-stepper (anchor relative-time &key (reverse nil))
+(declaim (inline relative-time-stepper))
+(defun relative-time-stepper (relative-time &key (reverse nil))
   (declare (type relative-time relative-time))
-  (declare (type (or fixed-time null) anchor))
   (declare (type boolean reverse))
   (lambda (time)
     (next-time time relative-time :reverse reverse)))
@@ -794,7 +1026,7 @@
 			   'local-time<) ,anchor ,end)))
        (loop
 	  with ,generator-sym =
-	  (relative-time-generator relative-time ,anchor
+	  (relative-time-generator ,relative-time ,anchor
 				   :reverse ,reverse)
 	  for ,value-sym = (funcall ,generator-sym)
 	  while ,(if reverse
@@ -837,6 +1069,45 @@
 	    '(series:scan-fn 'fixed-time generator-func generator-func)))))
 
 ;; These routines return the present time if it matches
+(declaim (inline this-monday
+		 this-tuesday
+		 this-wednesday
+		 this-thursday
+		 this-friday
+		 this-saturday
+		 this-sunday))
+
+(defun this-monday (anchor &key (reverse nil))
+  (next-time anchor (relative-time :day-of-week 1) :reverse reverse
+	     :accept-anchor t))
+(defun this-tuesday (anchor &key (reverse nil))
+  (next-time anchor (relative-time :day-of-week 2) :reverse reverse
+	     :accept-anchor t))
+(defun this-wednesday (anchor &key (reverse nil))
+  (next-time anchor (relative-time :day-of-week 3) :reverse reverse
+	     :accept-anchor t))
+(defun this-thursday (anchor &key (reverse nil))
+  (next-time anchor (relative-time :day-of-week 4) :reverse reverse
+	     :accept-anchor t))
+(defun this-friday (anchor &key (reverse nil))
+  (next-time anchor (relative-time :day-of-week 5) :reverse reverse
+	     :accept-anchor t))
+(defun this-saturday (anchor &key (reverse nil))
+  (next-time anchor (relative-time :day-of-week 6) :reverse reverse
+	     :accept-anchor t))
+(defun this-sunday (anchor &key (reverse nil))
+  (next-time anchor (relative-time :day-of-week 0) :reverse reverse
+	     :accept-anchor t))
+
+;; These routines do not return the present time if it matches
+(declaim (inline next-monday
+		 next-tuesday
+		 next-wednesday
+		 next-thursday
+		 next-friday
+		 next-saturday
+		 next-sunday))
+
 (defun next-monday (anchor &key (reverse nil))
   (next-time anchor (relative-time :day-of-week 1) :reverse reverse))
 (defun next-tuesday (anchor &key (reverse nil))
@@ -852,33 +1123,71 @@
 (defun next-sunday (anchor &key (reverse nil))
   (next-time anchor (relative-time :day-of-week 0) :reverse reverse))
 
+;; These routines do not return the present time if it matches
+(declaim (inline previous-monday
+		 previous-tuesday
+		 previous-wednesday
+		 previous-thursday
+		 previous-friday
+		 previous-saturday
+		 previous-sunday))
+
+(defun previous-monday (anchor)
+  (previous-time anchor (relative-time :day-of-week 1)))
+(defun previous-tuesday (anchor)
+  (previous-time anchor (relative-time :day-of-week 2)))
+(defun previous-wednesday (anchor)
+  (previous-time anchor (relative-time :day-of-week 3)))
+(defun previous-thursday (anchor)
+  (previous-time anchor (relative-time :day-of-week 4)))
+(defun previous-friday (anchor)
+  (previous-time anchor (relative-time :day-of-week 5)))
+(defun previous-saturday (anchor)
+  (previous-time anchor (relative-time :day-of-week 6)))
+(defun previous-sunday (anchor)
+  (previous-time anchor (relative-time :day-of-week 0)))
+
 (defun year-begin (anchor)
   (previous-time anchor (relative-time :month 1 :day 1 :hour 0
 				       :minute 0 :second 0
-				       :millisecond 0)))
-(defun quarter-begin (anchor))
+				       :millisecond 0)
+		 :accept-anchor t))
+
 (defun month-begin (anchor)
   (previous-time anchor (relative-time :day 1 :hour 0
 				       :minute 0 :second 0
-				       :millisecond 0)))
+				       :millisecond 0)
+		 :accept-anchor t))
+
 (defun sunday-week-begin (anchor)
   (previous-time anchor (relative-time :day-of-week 0 :hour 0
 				       :minute 0 :second 0
-				       :millisecond 0)))
+				       :millisecond 0)
+		 :accept-anchor t))
+
 (defun monday-week-begin (anchor)
   (previous-time anchor (relative-time :day-of-week 1 :hour 0
 				       :minute 0 :second 0
-				       :millisecond 0)))
+				       :millisecond 0)
+		 :accept-anchor t))
+
 (defun day-begin (anchor)
   (previous-time anchor (relative-time :hour 0 :minute 0 :second 0
-				       :millisecond 0)))
+				       :millisecond 0)
+		 :accept-anchor t))
+
 (defun hour-begin (anchor)
   (previous-time anchor (relative-time :minute 0 :second 0
-				       :millisecond 0)))
+				       :millisecond 0)
+		 :accept-anchor t))
+
 (defun minute-begin (anchor)
-  (previous-time anchor (relative-time :second 0 :millisecond 0)))
+  (previous-time anchor (relative-time :second 0 :millisecond 0)
+		 :accept-anchor t))
+
 (defun second-begin (anchor)
-  (previous-time anchor (relative-time :millisecond 0)))
+  (previous-time anchor (relative-time :millisecond 0)
+		 :accept-anchor t))
 
 (defun year-end (anchor &key (inclusive-p nil))
   (let ((time (next-time anchor (relative-time :month 1
@@ -890,7 +1199,7 @@
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
-(defun quarter-end (anchor &key (inclusive-p nil)))
+
 (defun month-end (anchor &key (inclusive-p nil))
   (let ((time (next-time anchor (relative-time :day 1
 					       :hour 0
@@ -900,16 +1209,19 @@
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
+
 (defun sunday-week-end (anchor &key (inclusive-p nil))
   (let ((time (next-sunday anchor)))
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
+
 (defun monday-week-end (anchor &key (inclusive-p nil))
   (let ((time (next-monday anchor)))
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
+
 (defun day-end (anchor &key (inclusive-p nil))
   (let ((time (next-time anchor (relative-time :hour 0
 					       :minute 0
@@ -918,6 +1230,7 @@
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
+
 (defun hour-end (anchor &key (inclusive-p nil))
   (let ((time (next-time anchor (relative-time :minute 0
 					       :second 0
@@ -925,81 +1238,193 @@
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
+
 (defun minute-end (anchor &key (inclusive-p nil))
   (let ((time (next-time anchor (relative-time :second 0
 					       :millisecond 0))))
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
+
 (defun second-end (anchor &key (inclusive-p nil))
   (let ((time (next-time anchor (relative-time :millisecond 0))))
     (if inclusive-p
 	time
 	(subtract-time time (duration :milliseconds 1)))))
 
+(defun next-year (&optional fixed-time)
+  (year-end fixed-time :inclusive-p t))
+(defun next-month (&optional fixed-time)
+  (month-end fixed-time :inclusive-p t))
+(defun next-sunday-week (&optional fixed-time)
+  (sunday-week-end fixed-time :inclusive-p t))
+(defun next-monday-week (&optional fixed-time)
+  (monday-week-end fixed-time :inclusive-p t))
+(defun next-day (&optional fixed-time)
+  (day-end fixed-time :inclusive-p t))
+(defun next-hour (&optional fixed-time)
+  (hour-end fixed-time :inclusive-p t))
+(defun next-minute (&optional fixed-time)
+  (minute-end fixed-time :inclusive-p t))
+(defun next-second (&optional fixed-time)
+  (second-end fixed-time :inclusive-p t))
+
+(defun previous-year (&optional fixed-time)
+  (previous-time (year-begin fixed-time)
+		 (relative-time :month 1 :day 1 :hour 0
+				:minute 0 :second 0
+				:millisecond 0)))
+(defun previous-month (&optional fixed-time)
+  (previous-time (year-begin fixed-time)
+		 (relative-time :day 1 :hour 0
+				:minute 0 :second 0
+				:millisecond 0)))
+(defun previous-sunday-week (&optional fixed-time)
+  (previous-sunday (previous-time fixed-time (relative-time :day-of-week 0)
+				  :accept-anchor t)))
+(defun previous-monday-week (&optional fixed-time)
+  (previous-monday (previous-time fixed-time (relative-time :day-of-week 1)
+				  :accept-anchor t)))
+(defun previous-day (&optional fixed-time)
+  (previous-time (year-begin fixed-time)
+		 (relative-time :hour 0 :minute 0 :second 0
+				:millisecond 0)))
+(defun previous-hour (&optional fixed-time)
+  (previous-time (year-begin fixed-time)
+		 (relative-time :minute 0 :second 0
+				:millisecond 0)))
+(defun previous-minute (&optional fixed-time)
+  (previous-time (year-begin fixed-time)
+		 (relative-time :second 0 :millisecond 0)))
+(defun previous-second (&optional fixed-time)
+  (previous-time (year-begin fixed-time)
+		 (relative-time :millisecond 0)))
+
 ;;;_ * RANGE
 
-(defstruct range
-  (begin)
-  (begin-inclusive-p)
-  (end)
-  (end-inclusive-p)
-  (duration)
-  (anchor))
+(defstruct (time-range  (:conc-name get-range-))
+  (begin nil)
+  (begin-inclusive-p t)
+  (end nil)
+  (end-inclusive-p nil)
+  (duration nil)
+  (anchor nil))
 
-(defun range-begin (range))
-(defun range-end (range))
-(defun range-duration (range))
-(defun time-in-range-p (range))
+(defmacro time-range (&rest args)
+  `(make-time-range ,@args))
 
-(defun year-range (fixed-time))
-(defun quarter-range (fixed-time))
-(defun month-range (fixed-time))
-(defun sunday-week-range (fixed-time))
-(defun monday-week-range (fixed-time))
-(defun day-range (fixed-time))
-(defun hour-range (fixed-time))
-(defun minute-range (fixed-time))
-(defun second-range (fixed-time))
+(defun time-range-begin (range &optional time)
+  (if time
+      (progn
+	(setf (get-range-begin range) time
+	      (get-range-duration range) nil)
+	(values))
+      (let ((begin (get-range-begin range)))
+	(if begin
+	    (if (typep begin 'relative-time)
+		(setf begin
+		      (setf (get-range-begin range)
+			    (previous-time (time-range-anchor range) begin)))
+		begin)
+	    (and (get-range-end range)
+		 (setf (get-range-begin range)
+		       (subtract-time (time-range-end range)
+				      (time-range-duration range))))))))
 
-(defun this-millenium ())
-(defun this-century ())
-(defun this-decade ())
-(defun this-year ())
-(defun this-quarter ())
-(defun this-month ())
-(defun this-sunday-week ())
-(defun this-monday-week ())
-(defun this-day ())
-(defun this-hour ())
-(defun this-minute ())
-(defun this-second ())
+(defun time-range-begin-inclusive-p (range &optional inclusive-p)
+  (if inclusive-p
+      (progn
+	(setf (get-range-begin-inclusive-p range) inclusive-p
+	      (get-range-duration range) nil)
+	(values))
+      (get-range-begin-inclusive-p range)))
 
-(defun next-millenium (&optional fixed-time))
-(defun next-century (&optional fixed-time))
-(defun next-decade (&optional fixed-time))
-(defun next-year (&optional fixed-time))
-(defun next-quarter (&optional fixed-time))
-(defun next-month (&optional fixed-time))
-(defun next-sunday-week (&optional fixed-time))
-(defun next-monday-week (&optional fixed-time))
-(defun next-day (&optional fixed-time))
-(defun next-hour (&optional fixed-time))
-(defun next-minute (&optional fixed-time))
-(defun next-second (&optional fixed-time))
+(defun time-range-end (range &optional time)
+  (if time
+      (progn
+	(setf (get-range-end range) time
+	      (get-range-duration range) nil)
+	(values))
+      (let ((end (get-range-end range)))
+	(if end
+	    (if (typep end 'relative-time)
+		(setf end
+		      (setf (get-range-end range)
+			    (next-time (time-range-anchor range) end)))
+		end)
+	    (and (get-range-begin range)
+		 (setf (get-range-end range)
+		       (add-time (time-range-begin range)
+				 (time-range-duration range))))))))
 
-(defun last-millenium (&optional fixed-time))
-(defun last-century (&optional fixed-time))
-(defun last-decade (&optional fixed-time))
-(defun last-year (&optional fixed-time))
-(defun last-quarter (&optional fixed-time))
-(defun last-month (&optional fixed-time))
-(defun last-sunday-week (&optional fixed-time))
-(defun last-monday-week (&optional fixed-time))
-(defun last-day (&optional fixed-time))
-(defun last-hour (&optional fixed-time))
-(defun last-minute (&optional fixed-time))
-(defun last-second (&optional fixed-time))
+(defun time-range-end-inclusive-p (range &optional inclusive-p)
+  (if inclusive-p
+      (progn
+	(setf (get-range-end-inclusive-p range) inclusive-p
+	      (get-range-duration range) nil)
+	(values))
+      (get-range-end-inclusive-p range)))
+
+(defun time-range-duration (range)
+  (or (get-range-duration range)
+      (let ((duration
+	     (time-difference (time-range-begin range)
+			      (time-range-end range)))
+	    (addend 0))
+	(unless (get-range-begin-inclusive-p range)
+	  (incf addend))
+	(unless (get-range-end-inclusive-p range)
+	  (incf addend))
+	(subtract-milliseconds duration addend
+			       (month-of (get-range-end range))
+			       (year-of (get-range-end range)))
+	(setf (get-range-duration range)
+	      duration))))
+
+(defun time-range-anchor (range)
+  (or (get-range-anchor range)
+      (setf (get-range-anchor range) (local-time:now))))
+
+(defun time-within-range-p (fixed-time range)
+  (let ((begin (time-range-begin range))
+	(end (time-range-end range)))
+    (and (or (null begin)
+	     (if (get-range-begin-inclusive-p range)
+		 (local-time>= fixed-time begin)
+		 (local-time> fixed-time begin)))
+	 (or (null end)
+	     (if (get-range-end-inclusive-p range)
+		 (local-time<= fixed-time end)
+		 (local-time< fixed-time end))))))
+
+(defun year-range (fixed-time)
+  (declare (ignore fixed-time)))
+(defun month-range (fixed-time)
+  (declare (ignore fixed-time)))
+(defun sunday-week-range (fixed-time)
+  (declare (ignore fixed-time)))
+(defun monday-week-range (fixed-time)
+  (declare (ignore fixed-time)))
+(defun day-range (fixed-time)
+  (declare (ignore fixed-time)))
+(defun hour-range (fixed-time)
+  (declare (ignore fixed-time)))
+(defun minute-range (fixed-time)
+  (declare (ignore fixed-time)))
+(defun second-range (fixed-time)
+  (declare (ignore fixed-time)))
+
+(defun this-millenium-range ())
+(defun this-century-range ())
+(defun this-decade-range ())
+(defun this-year-range ())
+(defun this-month-range ())
+(defun this-sunday-week-range ())
+(defun this-monday-week-range ())
+(defun this-day-range ())
+(defun this-hour-range ())
+(defun this-minute-range ())
+(defun this-second-range ())
 
 ;;;_ * PERIOD
 
@@ -1009,241 +1434,33 @@
   (skip-stepper)
   (ranges))
 
-(defun compose-period (range step &key (skip nil) (predicate nil)))
-(defun period-begin (range))
-(defun period-end (range))
-(defun time-in-period-p (range))
+(defun compose-period (range step &key (skip nil) (predicate nil))
+  (declare (ignore range))
+  (declare (ignore step))
+  (declare (ignore skip))
+  (declare (ignore predicate)))
+(defun time-period-begin (period)
+  (declare (ignore period)))
+(defun time-period-end (period)
+  (declare (ignore period)))
+(defun in-time-period-p (period)
+  (declare (ignore period)))
 
-(defun range-stepper (period))
-(defun map-ranges (period))
-(defun do-ranges (period))
-(defun scan-ranges (period))
+(defun time-period-stepper (period)
+  (declare (ignore period)))
+(defun time-period-generator (period)
+  (declare (ignore period)))
+(defun map-time-periods (period)
+  (declare (ignore period)))
+(defun do-time-periods (period)
+  (declare (ignore period)))
+(defun scan-time-periods (period)
+  (declare (ignore period)))
 
-(defun parse-period-description (string))
+(defun parse-period-description (string)
+  (declare (ignore string)))
 
 ;;;_ * Library functions
-
-;;;_ * Old Code
-
-(defun increment-time (epoch &key
-		       (terminus nil)
-		       (specifier nil)
-		       (years nil)
-		       (months nil)
-		       (days nil)
-		       (hours nil)
-		       (minutes nil)
-		       (seconds nil)
-		       (milliseconds nil)
-		       (floorp nil))
-  (if specifier
-      (let* ((step-by (getf specifier :step-by))
-	     (skip (getf specifier :skip))
-	     (until (getf specifier :until))
-	     (end-of-range
-	      (apply #'increment-time*
-		     epoch
-		     :terminus (or terminus until)
-		     :terminus-forward-p t
-		     :floorp floorp
-		     step-by)))
-	(when end-of-range
-	  (if skip
-	      (values epoch end-of-range
-		      (apply #'increment-time* epoch
-			     :terminus (or terminus until)
-			     :terminus-forward-p t
-			     :floorp floorp
-			     skip))
-	      (values epoch end-of-range end-of-range))))
-      (increment-time* epoch
-		       :terminus terminus
-		       :terminus-forward-p t
-		       :years years
-		       :months months
-		       :days days
-		       :hours hours
-		       :minutes minutes
-		       :seconds seconds
-		       :milliseconds milliseconds
-		       :floorp floorp)))
-
-(defun decrement-time (epoch &key
-		       (terminus nil)
-		       (years nil)
-		       (months nil)
-		       (days nil)
-		       (hours nil)
-		       (minutes nil)
-		       (seconds nil)
-		       (milliseconds nil)
-		       (floorp nil))
-  (increment-time* epoch
-		   :terminus terminus
-		   :terminus-forward-p nil
-		   :years (- years)
-		   :months (- months)
-		   :days (- days)
-		   :hours (- hours)
-		   :minutes (- minutes)
-		   :seconds (- seconds)
-		   :milliseconds (- milliseconds)
-		   :floorp floorp))
-
-(defun sleep-until (epoch)
-  (let ((now (local-time:now)))
-    (if (local-time:local-time> epoch now)
-	(sleep (+ (* 86400 (- (local-time:local-time-day epoch)
-			      (local-time:local-time-day now)))
-		  (- (local-time:local-time-sec epoch)
-		     (local-time:local-time-sec now))
-		  (/ (- (local-time:local-time-msec epoch)
-			(local-time:local-time-msec now)) 1000))))))
-
-(defun time-period-generator (&key
-			      (specifier nil)
-			      (from nil)
-			      (until nil)
-			      (years nil)
-			      (months nil)
-			      (days nil)
-			      (hours nil)
-			      (minutes nil)
-			      (seconds nil)
-			      (milliseconds nil)
-			      (floorp nil)
-			      (sleep-until-period-p nil))
-  "Create a generator to iterate through successive time periods.
-
-  For example: (time-period-generator :days 4) returns a function that can be
-  called repeatedly.  Each time it is called, it returns either NIL to
-  represent no further periods, or a three values:
-
-    (values START-OF-PERIOD END-OF-PERIOD START-OF-NEXT-PERIOD)
-
-  Because the START-OF-PERIOD is likely to be of most interest, a common idiom
-  for using the generator might be:
-
-    (loop
-       with generator = (time-period-generator :days 4)
-       for moment = (funcall generator)
-       for i from 1 to 10
-       while (and moment (<= i 10))
-       do (format t \"The new date is: ~S~%\" moment))
-
-  This loop prints out what the date is, every four days from now, ten times.
-
-  There are two different ways of specifying the period to be looped.  For
-  convenience, there are several keywords for specifying basic spans of time:
-
-    :FROM <LOCAL-TIME>       (where <TIME> can also be :NOW)
-    :UNTIL   <LOCAL-TIME>
-
-    :YEARS <INTEGER>
-    :MONTHS <INTEGER>
-    :DAYS <INTEGER>
-    :HOURS <INTEGER>
-    :MINUTES <INTEGER>
-    :SECONDS <INTEGER>
-    :MILLISECONDS <INTEGER>
-
-  The other way of specifying time is intended for machine generation.  In
-  this case, you use the :SPECIFIER keyword and a time specifier.  The easiest
-  way to create a time specifier is to call `parse-time-period', which takes a
-  natural language string, for example:
-
-    (parse-time-period \"every second thursday in this year\")
-
-  Please see the documentation for that function for more details."
-  (let ((time-specifier
-	 (if specifier
-	     (parse-time-period  specifier)
-	     `(:step-by
-	       ,@(let (steps)
-		      (if years
-			  (push `(:years ,years) steps))
-		      (if months
-			  (push `(:months ,months) steps))
-		      (if days
-			  (push `(:days ,days) steps))
-		      (if hours
-			  (push `(:hours ,hours) steps))
-		      (if minutes
-			  (push `(:minutes ,minutes) steps))
-		      (if seconds
-			  (push `(:seconds ,seconds) steps))
-		      (if milliseconds
-			  (push `(:milliseconds ,milliseconds) steps))
-		      steps)
-	       :from  ,from
-	       :until ,until)))
-	epoch terminated-p)
-    ;; construct a closure which iterates over the period
-    (lambda (&optional new-from)
-      (unless terminated-p
-	(let ((begin
-	       (or new-from
-		   epoch
-		   (getf time-specifier :from)
-		   (if floorp
-		       (floor-time (local-time:now)
-				   (find-smallest-resolution
-				    (getf time-specifier :step-by)))
-		       (local-time:now)))))
-	  (multiple-value-bind
-		(period-start period-end next-period-start)
-	      (increment-time begin :specifier time-specifier
-			      :floorp floorp)
-	    (if period-start
-		(progn
-		  (setf epoch next-period-start)
-		  (if sleep-until-period-p
-		      (sleep-until period-start))
-		  (values period-start period-end next-period-start))
-		(progn
-		  (setf terminated-p t)
-		  nil))))))))
-
-(defun time-periods (&rest time-specifiers)
-  (loop
-     with generator-func = (apply #'time-period-generator time-specifiers)
-     for period = (multiple-value-list (funcall generator-func))
-     while (car period)
-     collect period))
-
-(defun map-over-time (closure &rest time-specifiers)
-  (loop
-     with generator-func = (apply #'time-period-generator time-specifiers)
-     for period = (funcall generator-func)
-     while period
-     do (funcall closure period)))
-
-(defmacro do-over-time (&rest time-specifiers)
-  (let ((moment (gensym)))
-    (multiple-value-bind (generator-func loop-words)
-	(eval `(time-period-generator ,@time-specifiers))
-      `(loop
-	  :for ,moment = (funcall ,generator-func)
-	  :while ,moment
-	  ,@loop-words))))
-
-;; This version of `collect-by-period' evolved thanks to help from pkhuong on
-;; #lisp.
-(defun collect-by-period (list periods &key (key #'identity))
-  (let (result)
-    (dolist (item list
-	     (mapcar (lambda (entry)
-		       (prog1 entry
-			 (setf (cdr entry)
-			       (nreverse (cdr entry)))))
-		     result))
-      (let ((date (funcall key item)))
-        (dolist (period periods)
-          (when (and (local-time>= date (nth 0 period))
-                     (local-time<= date (nth 1 period)))
-            (push item (cdr (or (assoc period result)
-                                (first (push (cons period nil)
-                                             result)))))))))))
 
 (provide 'periods)
 
