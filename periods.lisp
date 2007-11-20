@@ -113,7 +113,8 @@
       (setf mm 0)
       (if (eq resolution :hour) (return))
       (setf hh 0)
-      (if (eq resolution :day) (return))
+      (if (or (eq resolution :day)
+	      (eq resolution :day-of-week)) (return))
       (setf day 1)
       (if (eq resolution :month) (return))
       (setf month 1))
@@ -126,6 +127,7 @@
     ((member :minute step-by) :minute)
     ((member :hour step-by) :hour)
     ((member :day step-by) :day)
+    ((member :day-of-week step-by) :day-of-week)
     ((member :month step-by) :month)))
 
 ;;;_ * FIXED-TIME
@@ -172,7 +174,8 @@
 	 (or (and (setf hh (getf args :hour))
 		  (return))
 	     (setf hh 0))
-	 (or (and (setf day (getf args :day))
+	 (or (and (or (getf args :day-of-week)
+		      (setf day (getf args :day)))
 		  (return))
 	     (setf day 1))
 	 (or (and (setf month (getf args :month))
@@ -1164,7 +1167,7 @@
 				:minute 0 :second 0
 				:millisecond 0)))
 (defun previous-month (&optional fixed-time)
-  (previous-time (year-begin fixed-time)
+  (previous-time (month-begin fixed-time)
 		 (relative-time :day 1 :hour 0
 				:minute 0 :second 0
 				:millisecond 0)))
@@ -1175,18 +1178,18 @@
   (previous-monday (previous-time fixed-time (relative-time :day-of-week 1)
 				  :accept-anchor t)))
 (defun previous-day (&optional fixed-time)
-  (previous-time (year-begin fixed-time)
+  (previous-time (day-begin fixed-time)
 		 (relative-time :hour 0 :minute 0 :second 0
 				:millisecond 0)))
 (defun previous-hour (&optional fixed-time)
-  (previous-time (year-begin fixed-time)
+  (previous-time (hour-begin fixed-time)
 		 (relative-time :minute 0 :second 0
 				:millisecond 0)))
 (defun previous-minute (&optional fixed-time)
-  (previous-time (year-begin fixed-time)
+  (previous-time (minute-begin fixed-time)
 		 (relative-time :second 0 :millisecond 0)))
 (defun previous-second (&optional fixed-time)
-  (previous-time (year-begin fixed-time)
+  (previous-time (second-begin fixed-time)
 		 (relative-time :millisecond 0)))
 
 ;;;_ * RANGE
