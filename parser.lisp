@@ -248,12 +248,12 @@
    (^ "yesterday" (day-range (previous-day)))))
 
 (defprod period ()
-  (^ (step-by (? (ws skip)) (? (ws range)))
+  (^ (step-by (? (p/ws skip)) (? (p/ws range)))
      (time-period :range range :step step-by :skip skip)))
 
 (defprod step-by ()
   (/
-   (^ ("every" ws units)      (apply #'duration units))
+   (^ ("every" p/ws units)      (apply #'duration units))
    (^ "hourly"		      (duration :hours 1))
    (^ "daily"		      (duration :days 1))
    (^ "weekly"		      (duration :days 7))
@@ -261,33 +261,33 @@
    (^ (/ "yearly" "annually") (duration :years 1))))
 
 (defprod skip ()
-  (^ ("every" ws skip-units)
+  (^ ("every" p/ws skip-units)
      (apply #'duration skip-units)))
 
 (defprod range (the-start the-end)
   (^ (/
-      ("from" ws (@ time-spec (setf the-start time-spec))
-	      ws "to"
-	      ws (@ time-spec (setf the-end time-spec)))
-      (@ ("since" ws time-spec) (setf the-start time-spec the-end (now)))
-      (@ ("until" ws time-spec) (setf the-start (now) the-end time-spec)))
+      ("from" p/ws (@ time-spec (setf the-start time-spec))
+	      p/ws "to"
+	      p/ws (@ time-spec (setf the-end time-spec)))
+      (@ ("since" p/ws time-spec) (setf the-start time-spec the-end (now)))
+      (@ ("until" p/ws time-spec) (setf the-start (now) the-end time-spec)))
      (time-range :begin the-start :end the-end)))
 
 (defprod units ()
   ((^ unit unit)
-   (? (? (+ ("," ws (^ unit (append unit units)))) ",")
-      (ws "and" ws (^ unit (append unit units))))))
+   (? (? (+ ("," p/ws (^ unit (append unit units)))) ",")
+      (p/ws "and" p/ws (^ unit (append unit units))))))
 
 (defprod skip-units ()
   ((^ skip-unit skip-unit)
-   (? (? (+ ("," ws (^ skip-unit (append skip-unit skip-units)))) ",")
-      (ws "and" ws (^ skip-unit (append skip-unit skip-units))))))
+   (? (? (+ ("," p/ws (^ skip-unit (append skip-unit skip-units)))) ",")
+      (p/ws "and" p/ws (^ skip-unit (append skip-unit skip-units))))))
 
 (defprod unit ()
-  (^ ((? number ws) basic-unit) (list basic-unit (or number 1))))
+  (^ ((? p/number p/ws) basic-unit) (list basic-unit (or p/number 1))))
 
 (defprod skip-unit ()
-  (^ ((? ordinal ws) basic-unit) (list basic-unit (or ordinal 1))))
+  (^ ((? p/ordinal p/ws) basic-unit) (list basic-unit (or p/ordinal 1))))
 
 (defprod basic-unit ()
   (^ ((^ 
@@ -304,7 +304,7 @@
 
 (defprod time-spec (reverse)
   (/ (^ "now" (fixed-time :hour 0))
-     (^ (unit ws (/ (@ "ago" (setf reverse t))
+     (^ (unit p/ws (/ (@ "ago" (setf reverse t))
                     (@ "from now" (setf reverse nil))))
         (add-time (floor-time (now) :day) (apply #'duration unit)
 		  :reverse reverse))))
