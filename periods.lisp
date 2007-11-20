@@ -59,10 +59,12 @@
 	   time-periods
 	   map-over-time
 	   do-over-time
-	   collect-by-period
+	   collate-by-time-period
 	   sleep-until))
 
 (in-package :periods)
+
+#+:periods-use-series (series::install)
 
 ;;;_ * Types
 
@@ -92,16 +94,16 @@
 	(incf days-in-month)
 	days-in-month)))
 
-(defun floor-time (time &optional resolution)
+(defun floor-time (fixed-time &optional resolution)
   "Reduce a fixed time to be no finer than RESOLUTION.
 
   For example, if the date is 2007-04-20, and the resolution is :month, the
   date is floored to 2007-04-01.  Anything smaller than the resolution is
   reduced to zero (or 1, if it is a day or month being reduced)."
-  (declare (type local-time time))
+  (declare (type local-time fixed-time))
   (multiple-value-bind
 	(ms ss mm hh day month year)
-      (decode-local-time time)
+      (decode-local-time fixed-time)
     (block nil
       (if (eq resolution :millisecond) (return))
       (setf ms 0)
@@ -1374,11 +1376,6 @@
 (defun time-period-end (period)
   (time-range-end (time-period-range period)))
 
-;;(defun time-within-period-p (period)
-;;  (declare (ignore period))
-;;  ;; jww (2007-11-19): this is a bit complicated..
-;;  )
-
 (defun time-period-generator (period)
   (declare (type time-period period))
   (let ((step-stepper (time-stepper (time-period-step period)))
@@ -1398,10 +1395,7 @@
 	      (if (if end-inclusive-p
 		      (local-time> next-begin end)
 		      (local-time>= next-begin end))
-		  (progn
-		    (if (local-time= this-end next-begin)
-			(setf this-end nil))
-		    (setf next-begin nil))))
+		  (setf next-begin nil)))
 	    (multiple-value-prog1
 		(values begin this-end next-begin)
 	      (setf begin next-begin)))
@@ -1434,44 +1428,37 @@
      ,result))
 
 #+periods-use-series
-(defmacro scan-time-period (period)
-  `(multiple-value-bind
-	 (begins ends next-begins)
-       (map-fn '(values
-		 (or fixed-time null)
-		 (or fixed-time null)
-		 (or fixed-time null))
-	       (time-period-generator ,period))
-     (until-if #'null begins ends next-begins)))
-
-(defun parse-period-description (string)
-  (declare (ignore string)))
+(defun scan-time-period (period)
+  (declare (optimizable-series-function))
+  (multiple-value-bind (begins ends next-begins)
+      (map-fn '(values
+		(or fixed-time null)
+		(or fixed-time null)
+		(or fixed-time null))
+	      (time-period-generator period))
+    (until-if #'null begins ends next-begins)))
 
 ;;;_ * Library functions
 
-(defun collate-in-time-period (list period &key (key #'identity))
+#+periods-use-series
+(defun collate-by-time-period (item-series period &key (key #'identity))
   "Return two series, one is a series of lists grouped by ranges within the
   period, and the other is a series of ranges, each element of which
   corresponds to the group elements in the same position within the first
   series."
-  (declare (optimizable-series-function))
-  (let ((next-series (scan list)))
-    (multiple-value-bind (begins ends)
-	(scan-time-period period)
-      (map-fn
-       t #'(lambda (begin end)
-	     (let ((items
-		    (multiple-value-bind (matching not-matching)
-			(split-if next-series
-				  #'(lambda (item)
-				      (time-within-begin-end-p
-				       (funcall key item) begin end)))
-		      (prog1
-			  matching
-			(setf next-series not-matching)))))
-	       (values (cons begin end)
-		       items)))
-       begins ends))))
+  (let (next-series)
+    (multiple-value-call #'map-fn
+      T #'(lambda (begin end next-begin)
+	    (declare (ignore next-begin))
+	    (list begin end
+		  (let (matching)
+		    (multiple-value-setq (matching next-series)
+		      (split-if (or next-series item-series)
+				#'(lambda (item)
+				    (time-within-begin-end-p
+				     (funcall key item) begin end))))
+		    matching)))
+      (scan-time-period period))))
 
 (defun sleep-until (fixed-time)
   (let ((now (local-time:now)))

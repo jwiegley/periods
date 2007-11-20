@@ -78,10 +78,10 @@
    (^ "tenth" 9)))
 
 (defprod time-spec (reverse)
-  (/ (^ "now" (now))
+  (/ (^ "now" (fixed-time :hour 0))
      (^ (unit ws (/ (@ "ago" (setf reverse t))
                     (@ "from now" (setf reverse nil))))
-        (add-time (now) (apply #'duration unit)
+        (add-time (floor-time (now) :day) (apply #'duration unit)
 		  :reverse reverse))))
 
 (defparser time-period-parser (^ period))
