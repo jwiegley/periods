@@ -13,7 +13,7 @@
 (defprod p/number ()
   (^ p/digits (parse-integer p/digits)))
 
-;;;_  + English
+;;;_  + English units
 
 (defprod p/cardinal ()
   (/
@@ -43,277 +43,396 @@
    (^ (/ "9th" "ninth") 8)
    (^ (/ "10th" "tenth") 9)))
 
-;;;_ * Fixed time
+(defstruct time-quantity
+  (resolution :day :type keyword)
+  (anchor nil :type (or fixed-time null))
+  (terminus nil :type (or fixed-time null))
+  (resolvedp nil :type boolean)
+  (offset nil :type (or relative-time null))
+  (multiple 1 :type integer)
+  (duration nil :type duration)
+  (reverse nil :type boolean))
 
-(defprod p/rel-time-unit ()
-  (/
-   (^ "millisecond"  (list))
-   (^ "second"       (list :millisecond 0))
-   (^ "minute"       (list :second 0))
-   (^ "hour"         (list :minute 0))
-   (^ "day"          (list :hour 0))
-   (^ "week"         (list :day-of-week 0))
-   (^ "month"        (list :day 1))
-   (^ "year"         (list :month 1))))
+(defun calculate-anchor (quantity)
+  (let ((begin
+	 (time-range-begin
+	  (time-range :begin (time-quantity-anchor quantity)
+		      :end (time-quantity-terminus quantity)
+		      :duration (time-quantity-duration quantity))))
+	(offset (time-quantity-offset quantity)))
+    (if (and offset (not (time-quantity-resolvedp quantity)))
+	(dotimes (i (time-quantity-multiple quantity))
+	  (setf begin (if (time-quantity-reverse quantity)
+			  (previous-time begin offset)
+			  (next-time begin offset)))))
+    begin))
 
 (defprod p/days-of-week ()
   (/
-   (^ "sunday"       (list :day-of-week 0))
-   (^ "monday"       (list :day-of-week 1))
-   (^ "tuesday"      (list :day-of-week 2))
-   (^ "wednesday"    (list :day-of-week 3))
-   (^ "thursday"     (list :day-of-week 4))
-   (^ "friday"       (list :day-of-week 5))
-   (^ "saturday"     (list :day-of-week 6))))
+   (^ "sunday"
+      (make-time-quantity :resolution :day
+			  :offset (relative-time :day-of-week 0)
+			  :duration (duration :days 1)))
+   (^ "monday"
+      (make-time-quantity :resolution :day
+			  :offset (relative-time :day-of-week 1)
+			  :duration (duration :days 1)))
+   (^ "tuesday"
+      (make-time-quantity :resolution :day
+			  :offset (relative-time :day-of-week 2)
+			  :duration (duration :days 1)))
+   (^ "wednesday"
+      (make-time-quantity :resolution :day
+			  :offset (relative-time :day-of-week 3)
+			  :duration (duration :days 1)))
+   (^ "thursday"
+      (make-time-quantity :resolution :day
+			  :offset (relative-time :day-of-week 4)
+			  :duration (duration :days 1)))
+   (^ "friday"
+      (make-time-quantity :resolution :day
+			  :offset (relative-time :day-of-week 5)
+			  :duration (duration :days 1)))
+   (^ "saturday"
+      (make-time-quantity :resolution :day
+			  :offset (relative-time :day-of-week 6)
+			  :duration (duration :days 1)))))
 
-(defprod p/fixed-time (anchor reverse)
+(defprod p/months-of-year ()
   (/
-   (^ "now" (now))
+   (^ (/ "January" "january" "Jan" "jan")
+      (make-time-quantity :resolution :month
+			  :offset (relative-time :month 1 :day 1)
+			  :duration (duration :months 1)))
+   (^ (/ "February" "january" "Jan" "jan")
+      (make-time-quantity :resolution :month
+			  :offset (relative-time :month 2 :day 1)
+			  :duration (duration :months 1)))
+   (^ (/ "March" "march" "Mar" "mar")
+      (make-time-quantity :resolution :month
+			  :offset (relative-time :month 3 :day 1)
+			  :duration (duration :months 1)))
+   (^ (/ "April" "april" "Apr" "apr")
+      (make-time-quantity :resolution :month
+			  :offset (relative-time :month 4 :day 1)
+			  :duration (duration :months 1)))
+   (^ (/ "May" "may")
+      (make-time-quantity :resolution :month
+			  :offset (relative-time :month 5 :day 1)
+			  :duration (duration :months 1)))
+   (^ (/ "June" "june" "Jun" "jun")
+      (make-time-quantity :resolution :month
+			  :offset (relative-time :month 6 :day 1)
+			  :duration (duration :months 1)))
+   (^ (/ "July" "july" "Jul" "jul")
+      (make-time-quantity :resolution :month
+			  :offset (relative-time :month 7 :day 1)
+			  :duration (duration :months 1)))
+   (^ (/ "August" "august" "Aug" "aug")
+      (make-time-quantity :resolution :month
+			  :offset (relative-time :month 8 :day 1)
+			  :duration (duration :months 1)))
+   (^ (/ "September" "september" "Sep" "sep")
+      (make-time-quantity :resolution :month
+			  :offset (relative-time :month 9 :day 1)
+			  :duration (duration :months 1)))
+   (^ (/ "October" "october" "Oct" "oct")
+      (make-time-quantity :resolution :month
+			  :offset (relative-time :month 10 :day 1)
+			  :duration (duration :months 1)))
+   (^ (/ "November" "november" "Nov" "nov")
+      (make-time-quantity :resolution :month
+			  :offset (relative-time :month 11 :day 1)
+			  :duration (duration :months 1)))
+   (^ (/ "December" "december" "Dec" "dec")
+      (make-time-quantity :resolution :month
+			  :offset (relative-time :month 12 :day 1)
+			  :duration (duration :months 1)))))
 
-   (^ p/time-range
-      (progn
-	(format t "p/fixed-time = ~S~%" p/time-range)
-	(time-range-begin p/time-range)))
-
-   (^ (p/time-duration
-       (/ (^ (p/ws (/
-		    (^ "from")
-		    (^ "after")
-		    (^ "since")) p/ws p/fixed-time)
-	     (setf anchor p/fixed-time
-		   reverse nil))
-	  (^ (p/ws (/
-		    (^ "before")) p/ws p/fixed-time)
-	     (setf anchor p/fixed-time
-		   reverse t))
-	  (^ (p/ws "ago")
-	     (setf anchor (now)
-		   reverse t))))
-      (progn
-	(format t "p/time-duration = ~S~%" p/time-duration)
-       (add-time anchor p/time-duration :reverse reverse)))))
-
-(defprod p/dur-time-unit ()
+(defprod p/time-unit ()
   (/
-   (^ "millisecond"  (list :milliseconds 1))
-   (^ "second"       (list :seconds 1))
-   (^ "minute"       (list :minutes 1))
-   (^ "hour"         (list :hours 1))
-   (^ "day"          (list :days 1))
-   (^ "week"         (list :days 7))
-   (^ "month"        (list :months 1))
-   (^ "year"         (list :years 1))))
+   (^ "millisecond"
+      (make-time-quantity :resolution :millisecond
+			  :duration (duration :milliseconds 1)))
+   (^ "second"
+      (make-time-quantity :resolution :second
+			  :offset (relative-time :millisecond 0)
+			  :duration (duration :seconds 1)))
+   (^ "minute"
+      (make-time-quantity :resolution :minute
+			  :offset (relative-time :second 0)
+			  :duration (duration :minutes 1)))
+   (^ "hour"
+      (make-time-quantity :resolution :hour
+			  :offset (relative-time :minute 0)
+			  :duration (duration :hours 1)))
+   (^ "day"
+      (make-time-quantity :resolution :day
+			  :offset (relative-time :hour 0)
+			  :duration (duration :days 1)))
+   (^ "week"
+      (make-time-quantity :resolution :day-of-week
+			  :offset (relative-time :day-of-week 0)
+			  :duration (duration :days 7)))
+   (^ "month"
+      (make-time-quantity :resolution :month
+			  :offset (relative-time :day 1)
+			  :duration (duration :months 1)))
+   (^ "year"
+      (make-time-quantity :resolution :year
+			  :offset (relative-time :month 1)
+			  :duration (duration :years 1)))))
+
+(defprod p/period-unit ()
+  (/
+   (^ "per-millisecond"  (duration :milliseconds 1))
+   (^ "per-second"       (duration :seconds 1))
+   (^ "per-minute"       (duration :minutes 1))
+   (^ "hourly"           (duration :hours 1))
+   (^ "daily"            (duration :days 1))
+   (^ "weekly"           (duration :days 7))
+   (^ "monthly"          (duration :months 1))
+   (^ (/ "yearly"
+	 "annually")     (duration :years 1))))
+
+;;;_ * A fixed point in time
+
+(defprod p/fixed-time (year month day)
+  (/
+   (^ "now"
+      (make-time-quantity :resolution :millisecond
+				      :duration (duration :milliseconds 1)
+				      :anchor (now)))
+
+   (^ ((^ p/number (setf year p/number)) "/"
+       (^ p/number (setf month p/number))
+       (? ("/" (^ p/number (setf day p/number)))))
+      (make-time-quantity :resolution (if day :day :month)
+			  :duration (duration (if day :days :months) 1)
+			  ;; jww (2007-11-20): Umm.. this could be much better
+			  :anchor (strptime (format nil "~4,'0D/~2,'0D/~2,'0D"
+						    year month day))))
+
+   (^ (p/months-of-year p/ws (/ p/ordinal p/cardinal))
+      (let ((number (1+ (or p/ordinal p/cardinal))))
+	(format t "initial p/months-of-year ~S~%" p/months-of-year)
+	(if (> number 40)
+	    (setf (relative-time-year (time-quantity-offset p/months-of-year))
+		  number)
+	    (progn
+	      (setf (relative-time-day (time-quantity-offset p/months-of-year))
+		    number
+		    (duration-months (time-quantity-duration p/months-of-year)) 0
+		    (duration-days (time-quantity-duration p/months-of-year)) 1)))
+	(format t "p/months-of-year is now ~S~%" p/months-of-year)
+	p/months-of-year))))
+
+;;;_ * A duration of time
 
 (defprod p/time-duration (reverse moment)
-  (^ (p/cardinal p/ws p/dur-time-unit (? #\s))
-     (progn
-       (setf (nth 1 p/dur-time-unit)
-	     (* (nth 1 p/dur-time-unit) (1+ p/cardinal)))
-       (apply #'duration p/dur-time-unit))))
+  ((^ p/duration-spec p/duration-spec)
+   (? (+
+       ((/ ("," (? p/ws))
+	   (p/ws "and" p/ws)
+	   ("," (? p/ws) "and" p/ws))
+	(^ p/duration-spec
+	   (setf (time-quantity-duration p/time-duration)
+		 (add-duration (time-quantity-duration p/time-duration)
+			       (time-quantity-duration p/duration-spec)))))))))
 
-;; jww (2007-11-20): Handle "the fourth tuesday"
-(defprod p/time-range (reverse moment end duration)
+(defprod p/duration-spec (reverse moment)
+  (^ ((? (/ "a" p/cardinal) p/ws) p/time-unit (? #\s))
+     (let ((duration (time-quantity-duration p/time-unit)))
+       (setf (time-quantity-duration p/time-unit)
+	     (if (and p/cardinal (plusp p/cardinal))
+		 (multiply-duration duration (1+ p/cardinal))
+		 duration))
+       p/time-unit)))
+
+;;;_ * A relative point in time
+
+(defmacro relative-time-helper (set-start begin)
+  `(let* ((anchor
+	   (setf (time-quantity-anchor p/time-reference)
+		 (floor-time (now) (time-quantity-resolution
+				    p/time-reference))))
+	  (rtime (time-quantity-offset p/time-reference))
+	  (dowp (eq (time-quantity-resolution p/time-reference)
+		    :day-of-week))
+	  (start ,set-start))
+     (setf (time-quantity-anchor p/time-reference) ,begin
+	   (time-quantity-resolvedp p/time-reference) t) 
+     p/time-reference))
+
+(defprod p/relative-time (reverse moment end duration)
   (/
-   (^ ((/ (^ "from")
-	  (^ "since")) p/ws (^ p/fixed-time
-			       (setf moment p/fixed-time)) p/ws
-       (/ (^ "until")
-	  (^ "to")) p/ws (^ p/fixed-time
-			    (setf end p/fixed-time)))
-      (time-range :begin moment :end end))
+   (^ ("this" p/ws p/time-reference)
+      (progn
+	(format t "this: ~S~%" p/time-reference)
+	(relative-time-helper
+	 (if dowp
+	     (next-time anchor rtime)
+	     (previous-time anchor rtime :accept-anchor t))
+	 start)))
 
-   (^ ((/ (^ "from")
-	  (^ "since")) p/ws (^ p/fixed-time
-	  (setf moment p/fixed-time)) p/ws
-       (/ (^ "until")
-	  (^ "to")) p/ws (^ p/time-duration
-	  (setf duration p/time-duration)))
-      (time-range :begin moment :duration duration))
+   (^ ((/ "next" "this next" "the following")
+       p/ws p/time-reference)
+      (relative-time-helper
+       (if dowp
+	   (next-time (next-time anchor rtime) rtime)
+	   (next-time anchor rtime))
+       start))
 
-   (^ ((/ (^ "from")
-	  (^ "since")) p/ws (^ p/time-duration
-	  (setf duration p/time-duration)) p/ws
-       (/ (^ "until")
-	  (^ "to")) p/ws (^ p/fixed-time
-	  (setf end p/fixed-time)))
-      (time-range :duration duration :end end))
-   
-   (^ ("this" p/ws p/rel-time-unit)
-      (let* ((rtime (apply #'relative-time p/rel-time-unit))
-	     (anchor
-	      (floor-time (now) (find-smallest-resolution p/rel-time-unit)))
-	     (begin (previous-time anchor rtime :accept-anchor t)))
-	(time-range :begin begin :end (next-time begin rtime))))
+   (^ ((/ "last" "this last" "this past" "the preceding")
+       p/ws p/time-reference)
+      (progn
+	(format t "saw time-reference ~S~%" p/time-reference)
+	(relative-time-helper
+	 (if dowp
+	     anchor
+	     (previous-time anchor rtime :accept-anchor t))
+	 (previous-time start rtime))
+	(prog1
+	    p/time-reference
+	  (format t "which is now ~S~%" p/time-reference))))
 
-   (^ ((/ (^ "next")
-	  (^ "this next")
-	  (^ "the following")) p/ws p/rel-time-unit)
-      (let* ((rtime (apply #'relative-time p/rel-time-unit))
-	     (anchor
-	      (floor-time (now) (find-smallest-resolution p/rel-time-unit)))
-	     (next (next-time anchor rtime)))
-	(time-range :begin next :end (next-time next rtime))))
+   (^ ((/ p/cardinal ((? "the" p/ws) p/ordinal))
+       p/ws p/time-reference (? #\s))
+      (progn
+	(setf (time-quantity-multiple p/time-reference)
+	      (1+ (or p/cardinal p/ordinal)))
+	p/time-reference))
 
-   (^ ((/ (^ "last")
-	  (^ "this last")
-	  (^ "this past")
-	  (^ "the preceding")) p/ws p/rel-time-unit)
-      (let* ((rtime (apply #'relative-time p/rel-time-unit))
-	     (anchor
-	      (floor-time (now) (find-smallest-resolution p/rel-time-unit)))
-	     (previous (previous-time anchor rtime :accept-anchor t)))
-	(time-range :begin (previous-time previous rtime)
-		    :end previous)))
+   (^ ("before" p/ws p/time-reference)
+      (progn
+	(calculate-anchor p/time-reference)
+	(setf (time-quantity-terminus p/time-reference)
+	      (time-quantity-anchor p/time-reference)
+	      (time-quantity-anchor p/time-reference) nil)))
 
-   ;;   ;; jww (2007-11-20): There is a difference between:
-   ;;   ;;   two weeks from today (today + 14 days)
-   ;;   ;;   last week (the sunday before last until this past sunday)
-   ;;   (^ (p/cardinal p/ws p/rel-time-unit (? #\s)
-   ;;		  (? (/ (^ (p/ws (/ (^ "from")
-   ;;				    (^ "since")) p/ws p/fixed-time)
-   ;;			   (progn
-   ;;			     (format t "Hello~%")
-   ;;			     (setf reverse nil
-   ;;				   moment p/fixed-time)))
-   ;;			(^ (p/ws "ago")
-   ;;			   (setf reverse t)))))
-   ;;      (let* ((rtime (apply #'relative-time p/rel-time-unit))
-   ;;	     (anchor
-   ;;	      (or moment
-   ;;		  (floor-time (now) (find-smallest-resolution
-   ;;				     p/rel-time-unit))))
-   ;;	     (start anchor))
-   ;;	(format t "moment = ~S~%" moment)
-   ;;	(dotimes (i (1+ p/cardinal))
-   ;;	  (setf start
-   ;;		(next-time start rtime
-   ;;			   :accept-anchor (and reverse
-   ;;					       (local-time= start anchor))
-   ;;			   :reverse reverse)))
-   ;;	(if reverse
-   ;;	    (time-range :begin (previous-time start rtime) :end start)
-   ;;	    (time-range :begin start :end (next-time start rtime)))))
+   (^ ("after" p/ws p/time-reference)
+      (progn
+	(calculate-anchor p/time-reference)
+	(setf (time-quantity-anchor p/time-reference)
+	      (time-quantity-terminus p/time-reference)
+	      (time-quantity-terminus p/time-reference) nil)))
 
-   (^ ("this" p/ws p/days-of-week)
-      (let* ((rtime (apply #'relative-time p/days-of-week))
-	     (anchor
-	      (floor-time (now) (find-smallest-resolution p/days-of-week)))
-	     ;; jww (2007-11-20): Does "this sunday" means next sunday, even
-	     ;; if today is Sunday?
-	     (begin (next-time anchor rtime)))
-	(time-range :begin begin :duration (duration :days 1))))
+   (^ ((/ "beginning"
+	  ("the" p/ws "beginning" p/ws "of")
+	  "from"
+	  "since"
+	  "in"
+	  "of")
+       p/ws p/time-reference)
+      (progn
+	(format t "from: ~S~%" p/time-reference)
+	p/time-reference))
 
-   (^ ((/ (^ "next")
-	  (^ "this next")
-	  (^ "the following")) p/ws p/days-of-week)
-      (let* ((rtime (apply #'relative-time p/days-of-week))
-	     (anchor
-	      (floor-time (now) (find-smallest-resolution p/days-of-week)))
-	     (next (next-time anchor rtime)))
-	(time-range :begin next :duration (duration :days 1))))
+   (^ ((/ "ending"
+	  ("the" p/ws "end" p/ws "of")
+	  "to"
+	  "until")
+       (p/ws p/time-reference))
+      (let ((anchor (calculate-anchor p/time-reference)))
+	(setf (time-quantity-anchor p/time-reference) nil
+	      (time-quantity-terminus p/time-reference) anchor)))
 
-   (^ ((/ (^ "last")
-	  (^ "this last")
-	  (^ "this past")
-	  (^ "the preceding")) p/ws p/days-of-week)
-      (let* ((rtime (apply #'relative-time p/days-of-week))
-	     (anchor
-	      (floor-time (now) (find-smallest-resolution p/days-of-week)))
-	     (previous (previous-time anchor rtime :accept-anchor t)))
-	(time-range :begin (previous-time previous rtime)
-		    :duration (duration :days 1))))
+   (^ ("during" p/ws p/time-reference)
+      p/time-reference)))
 
-   ;;   (^ (p/cardinal p/ws p/days-of-week
-   ;;		  (? #\s) p/ws
-   ;;		  (? (/ (^ "from now" (setf reverse nil))
-   ;;			(^ "ago" (setf reverse t)))))
-   ;;      (let* ((rtime (apply #'relative-time p/days-of-week))
-   ;;	     (anchor
-   ;;	      (floor-time (now) (find-smallest-resolution p/days-of-week)))
-   ;;	     (start anchor))
-   ;;	(dotimes (i (1+ p/cardinal))
-   ;;	  (setf start
-   ;;		(next-time start rtime
-   ;;			   :accept-anchor (and reverse
-   ;;					       (local-time= start anchor))
-   ;;			   :reverse reverse)))
-   ;;	(if reverse
-   ;;	    (time-range :begin (previous-time start (relative-time :day 1))
-   ;;			:end start)
-   ;;	    (time-range :begin start
-   ;;			:end (next-time start (relative-time :day 1)))))) 
+;;;_ * The high-level entry point
 
-   (^ "today" (this-day-range))
-   (^ "tomorrow" (day-range (next-day)))
-   (^ "yesterday" (day-range (previous-day)))))
-
-(defprod period ()
-  (^ (step-by (? (p/ws skip)) (? (p/ws range)))
-     (time-period :range range :step step-by :skip skip)))
-
-(defprod step-by ()
+(defprod p/time-reference ()
   (/
-   (^ ("every" p/ws units)      (apply #'duration units))
-   (^ "hourly"		      (duration :hours 1))
-   (^ "daily"		      (duration :days 1))
-   (^ "weekly"		      (duration :days 7))
-   (^ "monthly"		      (duration :months 1))
-   (^ (/ "yearly" "annually") (duration :years 1))))
+   (^ p/fixed-time     p/fixed-time)
+   (^ p/days-of-week   p/days-of-week)
+   (^ p/time-duration  p/time-duration)
+   (^ p/relative-time  p/relative-time)))
 
-(defprod skip ()
-  (^ ("every" p/ws skip-units)
-     (apply #'duration skip-units)))
+(defprod p/qualified-time (quantity)
+  (^ ((^ p/time-reference (setf quantity p/time-reference))
+      (? (+ p/ws
+	    (^ p/qualified-time
+	       ;; Try to merge the details of this later time specification into
+	       ;; the first one (the anchor and duration of which take priority)
+	       (setf (time-quantity-offset quantity)
+		     (time-quantity-offset p/qualified-time))
+	       (unless (time-quantity-anchor quantity)
+		 (setf (time-quantity-anchor quantity)
+		       (time-quantity-anchor p/qualified-time)))
+	       (unless (time-quantity-duration quantity)
+		 (setf (time-quantity-duration quantity)
+		       (time-quantity-duration p/qualified-time)))
+	       (format t "qualified-time: ~S~%" p/qualified-time)))))
+     quantity))
 
-(defprod range (the-start the-end)
-  (^ (/
-      ("from" p/ws (@ time-spec (setf the-start time-spec))
-	      p/ws "to"
-	      p/ws (@ time-spec (setf the-end time-spec)))
-      (@ ("since" p/ws time-spec) (setf the-start time-spec the-end (now)))
-      (@ ("until" p/ws time-spec) (setf the-start (now) the-end time-spec)))
-     (time-range :begin the-start :end the-end)))
+(defprod p/time (quantity)
+  (^ ((^ p/qualified-time (setf quantity p/qualified-time))
+      (? p/ws (^ "ago"
+		 (setf (time-quantity-terminus quantity) (now)
+		       (time-quantity-reverse quantity) t))))
+     quantity))
 
-(defprod units ()
-  ((^ unit unit)
-   (? (? (+ ("," p/ws (^ unit (append unit units)))) ",")
-      (p/ws "and" p/ws (^ unit (append unit units))))))
+;;;_ * A recurring period of time
 
-(defprod skip-units ()
-  ((^ skip-unit skip-unit)
-   (? (? (+ ("," p/ws (^ skip-unit (append skip-unit skip-units)))) ",")
-      (p/ws "and" p/ws (^ skip-unit (append skip-unit skip-units))))))
+(defprod p/time-period ()
+  (/
+   ;; monthly [from now until when]
+   (^ (p/time-step (? (p/ws p/time-range)))
+      (time-period :range p/time-range :step p/time-step :skip nil))
 
-(defprod unit ()
-  (^ ((? p/number p/ws) basic-unit) (list basic-unit (or p/number 1))))
+   ;; every 2 weeks for a year ...
+   (^ (p/time-step "for" p/time-duration (? (p/ws p/time-range)))
+      (time-period :range p/time-range :step p/time-step :skip nil))
 
-(defprod skip-unit ()
-  (^ ((? p/ordinal p/ws) basic-unit) (list basic-unit (or p/ordinal 1))))
+   ;; (for) 2 hours weekly ...
+   (^ ((? "for") p/time-duration p/time-step (? (p/ws p/time-range)))
+      (time-period :range p/time-range :step p/time-step :skip nil))))
 
-(defprod basic-unit ()
-  (^ ((^ 
-       (/ "millisecond"
-	  "second"
-	  "minute"
-	  "hour"
-	  "day"
-	  "week"			; jww (2007-11-19): meaning?
-	  "month"
-	  "year"))
-      (? "s"))
-     (intern (string-upcase (format nil "~as" basic-unit)) :keyword)))
+(defprod p/time-step ()
+  (/
+   (^ ("every" p/ws p/time-duration) p/time-duration)
+   (^ p/period-unit p/period-unit)))
 
-(defprod time-spec (reverse)
-  (/ (^ "now" (fixed-time :hour 0))
-     (^ (unit p/ws (/ (@ "ago" (setf reverse t))
-                    (@ "from now" (setf reverse nil))))
-        (add-time (floor-time (now) :day) (apply #'duration unit)
-		  :reverse reverse))))
+;;;_ * These are the top level entry points, which return real objects
 
-(defparser time-period-parser (^ period))
-
-(defun parse-time-period (string)
-  (multiple-value-bind (ok value) (time-period-parser string)
-    (if ok value nil)))
+;;(defparser fixed-time-parser
+;;    (^ p/time-range
+;;       (calculate-anchor p/time-range)))
+;;
+;;(defun parse-fixed-time (string)
+;;  (multiple-value-bind (ok value) (fixed-time-parser string)
+;;    (if ok value nil)))
+;;
+;;(defparser duration-parser
+;;    (^ p/time-duration
+;;       (progn
+;;	 ;; for side effects...
+;;	 (calculate-anchor p/time-duration)
+;;	 (time-quantity-duration p/time-duration))))
+;;
+;;(defun parse-duration (string)
+;;  (multiple-value-bind (ok value) (duration-parser string)
+;;    (if ok value nil)))
+;;
+;;(defparser time-range-parser
+;;    (^ p/time-range
+;;       (progn
+;;	 ;; for side effects...
+;;	 (calculate-anchor p/time-range)
+;;	 (time-range :begin (time-quantity-anchor p/time-range)
+;;		     :end (time-quantity-terminus p/time-range)
+;;		     :duration (time-quantity-duration p/time-range)))))
+;;
+;;(defun parse-time-range (string)
+;;  (multiple-value-bind (ok value) (time-range-parser string)
+;;    (if ok value nil)))
+;;
+;;(defparser time-period-parser (^ p/time-period))
+;;
+;;(defun parse-time-period (string)
+;;  (multiple-value-bind (ok value) (time-period-parser string)
+;;    (if ok value nil)))
 
 (defmacro tdp (production input)
   `((lambda (x)
