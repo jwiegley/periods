@@ -1,2 +1,4 @@
-^_darcs$
 \.fasl$
+\.fsl$
+\.x?fasl$
+\.x86f$
