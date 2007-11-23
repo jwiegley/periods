@@ -702,9 +702,9 @@
     (t
      (error "`enclosing-duration' has failed."))))
 
-(defun details-match-relative-time-p (ms ss mm hh day month year
+(defun details-match-relative-time-p (relative-time ms ss mm hh day month year
 				      day-of-week daylight-p
-				      timezone tz-abbrev relative-time)
+				      timezone tz-abbrev)
   (declare (ignore daylight-p))
   (declare (ignore timezone))
   (declare (ignore tz-abbrev))
@@ -729,16 +729,24 @@
 (declaim (inline matches-relative-time-p))
 (defun matches-relative-time-p (fixed-time relative-time)
   "Return T if the given FIXED-TIME honors the details in RELATIVE-TIME."
-  `(details-match-relative-time-p
-    ,@(multiple-value-list (decode-local-time fixed-time)) ,relative-time))
+  (apply #'details-match-relative-time-p
+	 relative-time (multiple-value-list (decode-local-time fixed-time))))
 
 ;; jww (2007-11-18): The following bug occurs:
-;;   (next-time (relative-time :month 2 :day 29) @2008-04-01)
+;;   (next-time @2008-04-01 (relative-time :month 2 :day 29))
 ;;     => @2009-03-29T00:33:08.004
 
 ;; jww (2007-11-18): There appears to be a bug in local-time itself:
 ;;   (local-time:parse-timestring "2008-02-29T00:00:00.000")
 ;;     => @2008-03-01T00:00:00.000
+
+;; jww (2007-11-22): This function fails to compile under CMUCL, although it
+;; does work under SBCL and LispWorks.  I get this:
+;;
+;;   Error in function LISP::ASSERT-ERROR:
+;;      The assertion (MEMBER C::KIND '(:OPTIONAL :CLEANUP :ESCAPE)) failed.
+;;      [Condition of type SIMPLE-ERROR]
+
 (defun next-time (anchor relative-time
 		  &key (reverse nil) (accept-anchor nil) (recursive-call nil))
   "Compute the first time after FIXED-TIME which matches RELATIVE-TIME.
@@ -795,9 +803,9 @@
       ;; either return it immediately (if :ACCEPT-ANCHOR is T), or else
       ;; recurse exactly one level to get the next relative time.
       (if (and (not recursive-call)
-	       (details-match-relative-time-p ms ss mm hh day month year
-					      day-of-week nil nil nil
-					      relative-time))
+	       (details-match-relative-time-p relative-time
+					      ms ss mm hh day month year
+					      day-of-week nil nil nil))
 	  (return-from next-time
 	    (if accept-anchor
 		moment
@@ -1798,16 +1806,17 @@
   series."
   (let (next-series)
     (multiple-value-call #'map-fn
-      T #'(lambda (begin end next-begin)
-	    (declare (ignore next-begin))
-	    (list begin end
-		  (let (matching)
-		    (multiple-value-setq (matching next-series)
-		      (split-if (or next-series item-series)
-				#'(lambda (item)
-				    (time-within-begin-end-p
-				     (funcall key item) begin end))))
-		    matching)))
+      '(values fixed-time fixed-time series)
+      #'(lambda (begin end next-begin)
+	  (declare (ignore next-begin))
+	  (list begin end
+		(let (matching)
+		  (multiple-value-setq (matching next-series)
+		    (split-if (or next-series item-series)
+			      #'(lambda (item)
+				  (time-within-begin-end-p
+				   (funcall key item) begin end))))
+		  matching)))
       (scan-time-period period))))
 
 ;;;_  + General purpose
