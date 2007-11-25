@@ -45,28 +45,28 @@
 
 (defprod p/days-of-week ()
   (/
-   (^ "sunday" :sun)
-   (^ "monday" :mon)
-   (^ "tuesday" :tue)
-   (^ "wednesday" :wed)
-   (^ "thursday" :thu)
-   (^ "friday" :fri)
-   (^ "saturday" :sat)))
+   (^ "sunday" (list :day-of-week 0))
+   (^ "monday" (list :day-of-week 1))
+   (^ "tuesday" (list :day-of-week 2))
+   (^ "wednesday" (list :day-of-week 3))
+   (^ "thursday" (list :day-of-week 4))
+   (^ "friday" (list :day-of-week 5))
+   (^ "saturday" (list :day-of-week 6))))
 
 (defprod p/months-of-year ()
   (/
-   (^ (/ "January" "january" "Jan" "jan") 1)
-   (^ (/ "February" "january" "Jan" "jan") 2)
-   (^ (/ "March" "march" "Mar" "mar") 3)
-   (^ (/ "April" "april" "Apr" "apr") 4)
-   (^ (/ "May" "may") 5)
-   (^ (/ "June" "june" "Jun" "jun") 6)
-   (^ (/ "July" "july" "Jul" "jul") 7)
-   (^ (/ "August" "august" "Aug" "aug") 8)
-   (^ (/ "September" "september" "Sep" "sep") 9)
-   (^ (/ "October" "october" "Oct" "oct") 10)
-   (^ (/ "November" "november" "Nov" "nov") 11)
-   (^ (/ "December" "december" "Dec" "dec") 12)))
+   (^ (/ "January" "january" "Jan" "jan") (list :month 1))
+   (^ (/ "February" "january" "Jan" "jan") (list :month 2))
+   (^ (/ "March" "march" "Mar" "mar") (list :month 3))
+   (^ (/ "April" "april" "Apr" "apr") (list :month 4))
+   (^ (/ "May" "may") (list :month 5))
+   (^ (/ "June" "june" "Jun" "jun") (list :month 6))
+   (^ (/ "July" "july" "Jul" "jul") (list :month 7))
+   (^ (/ "August" "august" "Aug" "aug") (list :month 8))
+   (^ (/ "September" "september" "Sep" "sep") (list :month 9))
+   (^ (/ "October" "october" "Oct" "oct") (list :month 10))
+   (^ (/ "November" "november" "Nov" "nov") (list :month 11))
+   (^ (/ "December" "december" "Dec" "dec") (list :month 12))))
 
 (defprod p/time-unit ()
   (/
@@ -75,20 +75,20 @@
    (^ "minute" :minute)
    (^ "hour" :hour)
    (^ "day" :day)
-   (^ "week" :day-of-week)
+   (^ "week" :week)
    (^ "month" :month)
    (^ "year" :year)))
 
 (defprod p/period-unit ()
   (/
-   (^ "per-millisecond"  :per-millisecond)
-   (^ "per-second"       :per-second)
-   (^ "per-minute"       :per-minute)
-   (^ "hourly"           :hourly)
-   (^ "daily"            :daily)
-   (^ "weekly"           :weekly)
-   (^ "monthly"          :monthly)
-   (^ (/ "yearly" "annually") :yearly)))
+   (^ "per millisecond"  (list :every (list :duration :millisecond 1)))
+   (^ "per second"       (list :every (list :duration :second 1)))
+   (^ "per minute"       (list :every (list :duration :minute 1)))
+   (^ "hourly"           (list :every (list :duration :hour 1)))
+   (^ "daily"            (list :every (list :duration :day 1)))
+   (^ "weekly"           (list :every (list :duration :week 1)))
+   (^ "monthly"          (list :every (list :duration :month 1)))
+   (^ (/ "yearly" "annually") (list :every (list :duration :year 1)))))
 
 ;;;_ * A fixed point in time
 
@@ -109,9 +109,12 @@
    (^ (p/months-of-year (? p/ws (/ p/ordinal p/cardinal)))
       (let ((number (or p/ordinal p/cardinal)))
 	(if number
-	    (list :rel :month p/months-of-year
-		  (if (> number 40) :year :day) number)
-	    (list :rel :month p/months-of-year))))))
+	    (list :rel :this
+		  (append (list :rel) p/months-of-year
+			  (list (if (> number 40) :year :day)
+				number)))
+	    (list :rel :this
+		  (append (list :rel) p/months-of-year)))))))
 
 ;;;_ * A duration of time
 
@@ -126,8 +129,11 @@
      (cons :duration duration)))
 
 (defprod p/duration-spec (reverse moment)
-  (^ ((? (/ "a" "the" p/cardinal) p/ws) p/time-unit (? #\s))
-     (list p/time-unit (or p/cardinal 1))))
+  (/
+   (^ (p/cardinal p/ws p/time-unit (? #\s))
+      (list p/time-unit p/cardinal))
+   (^ ((? ("a" p/ws)) p/time-unit)
+      (list p/time-unit 1))))
 
 ;;;_ * A relative point in time
 
@@ -136,11 +142,15 @@
    (^ ("this" (? p/ws p/time-reference))
       (list :rel :this p/time-reference))
 
-   (^ ((? "the") (/ "next" "this next" "the following")
+   ;; jww (2007-11-23): I don't handle "the 2 months after january", which
+   ;; means something very different from "2 months after january"
+   (^ ((/ ((/ "the" "this") (? (p/ws (/ "next" "following"))))
+	  "next")
        (? p/ws p/time-reference))
       (list :rel :next p/time-reference))
 
-   (^ ((? "the") (/ "last" "this last" "this past" "the preceding")
+   (^ ((/ ((/ "the" "this") (p/ws (/ "last" "previous" "preceeding")))
+	  "last")
        (? p/ws p/time-reference))
       (list :rel :last p/time-reference))
 
@@ -283,6 +293,228 @@
 (defun parse-time (string)
   (multiple-value-bind (ok value) (time-parser string)
     (if ok value nil)))
+
+(defun compile-duration (data &optional verbose)
+  (let (new-list)
+    (do ((old data (cdr old)))
+	((null old))
+      (if (keywordp (first old))
+	  (ecase (first old)
+	    (:year
+	     (push :years new-list))
+	    (:month
+	     (push :months new-list))
+	    (:week
+	     (push :days new-list)
+	     (push (* 7 (first (rest old))) new-list)
+	     (setf old (rest old)))
+	    (:day
+	     (push :days new-list))
+	    (:hour
+	     (push :hours new-list))
+	    (:minute
+	     (push :minutes new-list))
+	    (:second
+	     (push :seconds new-list))
+	    (:millisecond
+	     (push :milliseconds new-list)))
+	  (progn
+	    (assert (integerp (first old)))
+	    (push (first old) new-list))))
+
+    (apply #'duration (nreverse new-list))))
+
+(defun compile-relative-time (data)
+  (let ((args (car (rest data))))
+    (labels
+	((fix-time (anchor resolution)
+	   (declare (type fixed-time anchor))
+	   (declare (type keyword resolution))
+	   (floor-time anchor resolution))
+	 (find-time (anchor reference)
+	   (declare (type fixed-time anchor))
+	   (declare (type relative-time reference))
+	   (previous-time anchor reference :accept-anchor t)))
+      (case (first data)
+	(:this
+	 (let* ((reference (compile-time (cadr data)))
+		(resolution (find-smallest-resolution (cadr data))))
+	   (etypecase reference
+	     (duration
+	      ;; jww (2007-11-23): Handle days of the week here; "this sunday"
+	      ;; uses a different kind of offset from "this month"
+	      (lambda (anchor)
+		(time-range :begin (fix-time anchor resolution)
+			    :duration reference)))
+	     (relative-time
+	      (lambda (anchor)
+		(time-range
+		 :begin (find-time (fix-time anchor resolution) reference)
+		 :duration (compile-duration (list resolution 1)))))
+
+	     (fixed-time reference)
+	     (function reference))))
+
+	(:last
+	 (let* ((reference (compile-time (cadr data)))
+		(resolution (find-smallest-resolution (cadr data))))
+	   (etypecase reference
+	     (duration
+	      (lambda (anchor)
+		(time-range
+		 :begin (subtract-time (fix-time anchor resolution)
+				       reference)
+		 :duration reference)))
+	     (relative-time
+	      (lambda (anchor)
+		(time-range
+		 :begin (previous-time
+			 (find-time (fix-time anchor resolution) reference)
+			 reference)
+		 :duration (compile-duration (list resolution 1)))))
+	     (function
+	      (lambda (anchor)
+	       (let ((result (funcall reference (the fixed-time anchor))))
+		 (etypecase result
+		   ;; jww (2007-11-23): This could be another relative time
+		   (time-range
+		    (setf (get-range-begin result)
+			  (subtract-time (get-range-begin result)
+					 (get-range-duration result)))))))))))
+
+	(:next
+	 (let* ((reference (compile-time (cadr data)))
+		(resolution (find-smallest-resolution (cadr data))))
+	   (etypecase reference
+	     (duration
+	      (lambda (anchor)
+		(time-range
+		 :begin (add-time (fix-time anchor resolution) reference)
+		 :duration reference)))
+	     (relative-time
+	      (lambda (anchor)
+		(time-range
+		 :begin (next-time (fix-time anchor resolution) reference)
+		 :duration (compile-duration (list resolution 1)))))
+	     (function
+	      (lambda (anchor)
+	       (let ((result (funcall reference (the fixed-time anchor))))
+		 (etypecase result
+		   (time-range
+		    (setf (get-range-begin result)
+			  (add-time (get-range-begin result)
+				    (get-range-duration result)))))))))))
+
+	(:before
+	 (let ((argument (compile-time args)))
+	   (etypecase argument
+	     (fixed-time
+	      (lambda (quantity)
+		(etypecase quantity
+		  (duration (subtract-time argument quantity))
+		  (relative-time (previous-time argument quantity)))))
+
+	     (relative-time
+	      (lambda (quantity)
+		(etypecase quantity
+		  (duration
+		   (lambda (anchor)
+		     (subtract-time (next-time (the fixed-time anchor) argument)
+				    quantity)))
+		  (relative-time
+		   (lambda (anchor)
+		     (next-time (next-time (the fixed-time anchor) argument)
+				quantity)))
+		  (function
+		   (lambda (anchor)
+		    (funcall quantity (next-time anchor argument)))))))
+
+	     (function
+	      (lambda (quantity)
+	       (etypecase quantity
+		 (duration
+		  (lambda (anchor)
+		    (add-time (funcall argument anchor) quantity)))
+		 (relative-time
+		  (lambda (anchor)
+		    (next-time (funcall argument anchor) quantity)))
+		 (function
+		  (lambda (anchor)
+		   (funcall quantity (funcall argument anchor))))))))))
+
+	(:after
+	 (let ((argument (compile-time args)))
+	   (etypecase argument
+	     (fixed-time
+	      (lambda (quantity)
+		(etypecase quantity
+		  (duration (add-time argument quantity))
+		  (relative-time (next-time argument quantity))
+		  (function (funcall quantity argument)))))
+
+	     (relative-time
+	      (lambda (quantity)
+		(etypecase quantity
+		  (duration
+		   (lambda (anchor)
+		     (add-time (next-time (the fixed-time anchor) argument)
+			       quantity)))
+		  (relative-time
+		   (lambda (anchor)
+		     (next-time (next-time (the fixed-time anchor) argument)
+				quantity)))
+		  (function
+		   (lambda (anchor)
+		    (funcall quantity (next-time anchor argument)))))))
+
+	     (function
+	      (lambda (quantity)
+	       (etypecase quantity
+		 (duration
+		  (lambda (anchor)
+		    (add-time (funcall argument anchor) quantity)))
+		 (relative-time
+		  (lambda (anchor)
+		    (next-time (funcall argument anchor) quantity)))
+		 (function
+		  (lambda (anchor)
+		   (funcall quantity (funcall argument anchor))))))))))
+
+	(otherwise
+	 (let ((reltime (apply #'relative-time data))
+	       (smallest-resolution (find-smallest-resolution data)))
+	   (lambda (anchor)
+	     (floor-time (previous-time anchor reltime :accept-anchor t)
+			 smallest-resolution))))))))
+
+(defun compile-time (data &optional verbose)
+  (if (keywordp (first data))
+      (case (first data)
+	(:fixed
+	 (let ((result (apply #'fixed-time (rest data))))
+	   (if verbose (format t "Compiling FIXED-TIME: ~S~%" result))
+	   result))
+	(:duration
+	 (let ((result (compile-duration (rest data) verbose)))
+	   (if verbose (format t "Compiling DURATION: ~S~%" result))
+	   result))
+	(:rel
+	 (let ((result (compile-relative-time (rest data))))
+	   (if verbose (format t "Compiling RELATIVE-TIME: ~S~%" result))
+	   result))
+	(:every
+	 (let ((result (time-period :step (compile-duration
+					   (rest (first (rest data)))))))
+	   (if verbose (format t "Compiling TIME-PERIOD: ~S~%" result))
+	   result)))
+      (let (last-result)
+	(dolist (element data)
+	  (let ((result (compile-time element verbose)))
+	    (setf last-result (if last-result
+				  (funcall (the function result)
+					   last-result)
+				  result))))
+	last-result)))
 
 (defmacro tdp (production input)
   `((lambda (x)
