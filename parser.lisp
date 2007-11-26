@@ -321,8 +321,9 @@
 	  (progn
 	    (assert (integerp (first old)))
 	    (push (first old) new-list))))
-
-    (apply #'duration (nreverse new-list))))
+    (lambda (anchor)
+      (time-range :duration (apply #'duration (nreverse new-list))
+		  :anchor anchor))))
 
 (defun compile-relative-time (data)
   (let ((args (car (rest data))))
@@ -337,148 +338,33 @@
 	   (previous-time anchor reference :accept-anchor t)))
       (case (first data)
 	(:this
-	 (let* ((reference (compile-time (cadr data)))
-		(resolution (find-smallest-resolution (cadr data))))
-	   (etypecase reference
-	     (duration
-	      ;; jww (2007-11-23): Handle days of the week here; "this sunday"
-	      ;; uses a different kind of offset from "this month"
-	      (lambda (anchor)
-		(time-range :begin (fix-time anchor resolution)
-			    :duration reference)))
-	     (relative-time
-	      (lambda (anchor)
-		(time-range
-		 :begin (find-time (fix-time anchor resolution) reference)
-		 :duration (compile-duration (list resolution 1)))))
-
-	     (fixed-time reference)
-	     (function reference))))
+	 (let ((reference (compile-time (cadr data)))
+	       (resolution (find-smallest-resolution (cadr data))))
+	   ;; jww (2007-11-23): Handle days of the week differently here;
+	   ;; "this sunday" uses a different kind of offset from "this month"
+	   (lambda (anchor)
+	     (let ((range (funcall reference anchor)))
+	       (unless (or (get-range-begin range)
+			   (get-range-end range))
+		 (setf (get-range-begin range) anchor))))))
 
 	(:last
-	 (let* ((reference (compile-time (cadr data)))
-		(resolution (find-smallest-resolution (cadr data))))
-	   (etypecase reference
-	     (duration
-	      (lambda (anchor)
-		(time-range
-		 :begin (subtract-time (fix-time anchor resolution)
-				       reference)
-		 :duration reference)))
-	     (relative-time
-	      (lambda (anchor)
-		(time-range
-		 :begin (previous-time
-			 (find-time (fix-time anchor resolution) reference)
-			 reference)
-		 :duration (compile-duration (list resolution 1)))))
-	     (function
-	      (lambda (anchor)
-	       (let ((result (funcall reference (the fixed-time anchor))))
-		 (etypecase result
-		   ;; jww (2007-11-23): This could be another relative time
-		   (time-range
-		    (setf (get-range-begin result)
-			  (subtract-time (get-range-begin result)
-					 (get-range-duration result)))))))))))
+	 (let ((reference (compile-time (cadr data)))
+	       (resolution (find-smallest-resolution (cadr data))))
+	   (lambda (anchor)
+	     (let ((range (funcall reference anchor)))
+	       (unless (or (get-range-begin range)
+			   (get-range-end range))
+		 (setf (get-range-begin range) anchor))))))
 
 	(:next
-	 (let* ((reference (compile-time (cadr data)))
-		(resolution (find-smallest-resolution (cadr data))))
-	   (etypecase reference
-	     (duration
-	      (lambda (anchor)
-		(time-range
-		 :begin (add-time (fix-time anchor resolution) reference)
-		 :duration reference)))
-	     (relative-time
-	      (lambda (anchor)
-		(time-range
-		 :begin (next-time (fix-time anchor resolution) reference)
-		 :duration (compile-duration (list resolution 1)))))
-	     (function
-	      (lambda (anchor)
-	       (let ((result (funcall reference (the fixed-time anchor))))
-		 (etypecase result
-		   (time-range
-		    (setf (get-range-begin result)
-			  (add-time (get-range-begin result)
-				    (get-range-duration result)))))))))))
+	 )
 
 	(:before
-	 (let ((argument (compile-time args)))
-	   (etypecase argument
-	     (fixed-time
-	      (lambda (quantity)
-		(etypecase quantity
-		  (duration (subtract-time argument quantity))
-		  (relative-time (previous-time argument quantity)))))
-
-	     (relative-time
-	      (lambda (quantity)
-		(etypecase quantity
-		  (duration
-		   (lambda (anchor)
-		     (subtract-time (next-time (the fixed-time anchor) argument)
-				    quantity)))
-		  (relative-time
-		   (lambda (anchor)
-		     (next-time (next-time (the fixed-time anchor) argument)
-				quantity)))
-		  (function
-		   (lambda (anchor)
-		    (funcall quantity (next-time anchor argument)))))))
-
-	     (function
-	      (lambda (quantity)
-	       (etypecase quantity
-		 (duration
-		  (lambda (anchor)
-		    (add-time (funcall argument anchor) quantity)))
-		 (relative-time
-		  (lambda (anchor)
-		    (next-time (funcall argument anchor) quantity)))
-		 (function
-		  (lambda (anchor)
-		   (funcall quantity (funcall argument anchor))))))))))
+	 )
 
 	(:after
-	 (let ((argument (compile-time args)))
-	   (etypecase argument
-	     (fixed-time
-	      (lambda (quantity)
-		(etypecase quantity
-		  (duration (add-time argument quantity))
-		  (relative-time (next-time argument quantity))
-		  (function (funcall quantity argument)))))
-
-	     (relative-time
-	      (lambda (quantity)
-		(etypecase quantity
-		  (duration
-		   (lambda (anchor)
-		     (add-time (next-time (the fixed-time anchor) argument)
-			       quantity)))
-		  (relative-time
-		   (lambda (anchor)
-		     (next-time (next-time (the fixed-time anchor) argument)
-				quantity)))
-		  (function
-		   (lambda (anchor)
-		    (funcall quantity (next-time anchor argument)))))))
-
-	     (function
-	      (lambda (quantity)
-	       (etypecase quantity
-		 (duration
-		  (lambda (anchor)
-		    (add-time (funcall argument anchor) quantity)))
-		 (relative-time
-		  (lambda (anchor)
-		    (next-time (funcall argument anchor) quantity)))
-		 (function
-		  (lambda (anchor)
-		   (funcall quantity (funcall argument anchor))))))))))
+	 )
 
 	(otherwise
 	 (let ((reltime (apply #'relative-time data))

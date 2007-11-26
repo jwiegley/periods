@@ -166,7 +166,8 @@
     ((member :hour step-by) :hour)
     ((member :day step-by) :day)
     ((member :day-of-week step-by) :day-of-week)
-    ((member :month step-by) :month)))
+    ((member :month step-by) :month)
+    (t (error "Could not find a time resolution in ~S" step-by))))
 
 ;;;_ * FIXED-TIME
 
@@ -1483,8 +1484,10 @@
 ;;;_ * RANGE
 
 (defstruct (time-range  (:conc-name get-range-))
+  (fixed-begin nil)
   (begin nil)
   (begin-inclusive-p t)
+  (fixed-end nil)
   (end nil)
   (end-inclusive-p nil)
   (duration nil)
@@ -1494,59 +1497,54 @@
 (defun time-range (&rest args)
   (apply #'make-time-range args))
 
-(defun time-range-begin (range &optional time)
-  (if time
-      (progn
-	(setf (get-range-begin range) time
-	      (get-range-duration range) nil)
-	(values))
-      (let ((begin (get-range-begin range)))
-	(if begin
-	    (if (typep begin 'relative-time)
-		(setf begin
-		      (setf (get-range-begin range)
-			    (previous-time (time-range-anchor range) begin)))
-		begin)
-	    (and (get-range-end range)
-		 (get-range-duration range)
-		 (setf (get-range-begin range)
-		       (subtract-time (time-range-end range)
-				      (time-range-duration range))))))))
+(defun time-range-begin (range)
+  (or (get-range-fixed-begin range)
+      (etypecase (get-range-begin range)
+	(fixed-time
+	 (setf (get-range-fixed-begin range)
+	       (get-range-begin range)))
 
-(defun time-range-begin-inclusive-p (range &optional inclusive-p)
-  (if inclusive-p
-      (progn
-	(setf (get-range-begin-inclusive-p range) inclusive-p
-	      (get-range-duration range) nil)
-	(values))
-      (get-range-begin-inclusive-p range)))
+	(relative-time
+	 ;; jww (2007-11-26): What if a duration was set?
+	 (setf (get-range-fixed-begin range)
+	       (previous-time (time-range-anchor range)
+			      (get-range-begin range))))
 
-(defun time-range-end (range &optional time)
-  (if time
-      (progn
-	(setf (get-range-end range) time
-	      (get-range-duration range) nil)
-	(values))
-      (let ((end (get-range-end range)))
-	(if end
-	    (if (typep end 'relative-time)
-		(setf end
-		      (setf (get-range-end range)
-			    (next-time (time-range-anchor range) end)))
-		end)
-	    (and (get-range-begin range)
-		 (get-range-duration range)
-		 (setf (get-range-end range)
-		       (add-time (time-range-begin range)
-				 (time-range-duration range))))))))
+	(null
+	 (and (get-range-end range)
+	      (get-range-duration range)
+	      (setf (get-range-begin range)
+		    (subtract-time (time-range-end range)
+				   (time-range-duration range))))))))
 
-(defun time-range-end-inclusive-p (range &optional inclusive-p)
-  (if inclusive-p
-      (progn
-	(setf (get-range-end-inclusive-p range) inclusive-p
-	      (get-range-duration range) nil)
-	(values))
-      (get-range-end-inclusive-p range)))
+(defsetf time-range-begin (range) (value)
+  `(setf (get-range-begin ,range) ,value))
+
+(defun time-range-begin-inclusive-p (range)
+  (get-range-begin-inclusive-p range))
+
+(defun time-range-end (range)
+  (or (get-range-fixed-end range)
+      (etypecase (get-range-end range)
+	(fixed-time
+	 (setf (get-range-fixed-end range)
+	       (get-range-end range)))
+
+	(relative-time
+	 ;; jww (2007-11-26): What if a duration was set?
+	 (setf (get-range-fixed-end range)
+	       (previous-time (time-range-anchor range)
+			      (get-range-end range))))
+
+	(null
+	 (and (get-range-begin range)
+	      (get-range-duration range)
+	      (setf (get-range-end range)
+		    (add-time (time-range-begin range)
+			      (time-range-duration range))))))))
+
+(defun time-range-end-inclusive-p (range)
+  (get-range-end-inclusive-p range))
 
 (defun time-range-duration (range)
   (or (get-range-duration range)
@@ -1590,6 +1588,46 @@
 	   (local-time>= fixed-time begin))
        (or (null end)
 	   (local-time< fixed-time end))))
+
+(defun time-range-next (range)
+  (let ((begin (get-range-begin range))	; uncooked
+	(end (get-range-end range))
+	(anchor (time-range-end range)))
+    (unless (or (null (time-range-begin range))
+		(null (time-range-end range)))
+      (cond
+	((typep begin 'relative-time)
+	 (time-range :begin (next-time anchor begin)
+		     :end (and (typep end 'relative-time)
+			       (next-time anchor end))
+		     :duration (and (not (typep end 'relative-time))
+				    (time-range-duration range))))
+	((typep begin 'fixed-time)
+	 (time-range :begin (add-time anchor (time-range-duration range))
+		     :end (and (typep end 'relative-time)
+			       (next-time anchor end))
+		     :duration (and (not (typep end 'relative-time))
+				    (time-range-duration range))))))))
+
+(defun time-range-previous (range)
+  (let ((begin (get-range-begin range))	; uncooked
+	(end (get-range-end range))
+	(anchor (time-range-begin range)))
+    (unless (or (null (time-range-begin range))
+		(null (time-range-end range)))
+      (cond
+	((typep begin 'relative-time)
+	 (time-range :begin (previous-time anchor begin)
+		     :end (and (typep end 'relative-time)
+			       (previous-time anchor end))
+		     :duration (and (not (typep end 'relative-time))
+				    (time-range-duration range))))
+	((typep begin 'fixed-time)
+	 (time-range :begin (subtract-time anchor (time-range-duration range))
+		     :end (and (typep end 'relative-time)
+			       (previous-time anchor end))
+		     :duration (and (not (typep end 'relative-time))
+				    (time-range-duration range))))))))
 
 (defun year-range (fixed-time &key (begin-inclusive-p t)
 		   (end-inclusive-p nil))
