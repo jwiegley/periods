@@ -20,8 +20,8 @@
   (let (year (month 1) (day 1) (hour 0) (minute 0) (second 0))
     (loop
        for c = (read-char in nil)
-       while c
        for next = (peek-char nil str nil)
+       while c
        do
        (if (char= c #\%) ; specifier
 	   (progn

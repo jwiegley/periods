@@ -1075,7 +1075,7 @@
 	      (if (relative-time-day-of-week relative-time)
 		  (loop
 		     for new-time =
-		     (encode-local-time nsec ss mm hh day month year)
+		       (encode-local-time nsec ss mm hh day month year)
 		     for new-dow = (nth-value 7 (decode-local-time new-time))
 		     while (/= new-dow (relative-time-day-of-week
 					relative-time))
@@ -1119,8 +1119,8 @@
 	   (,end-sym ,end))
        (loop
 	  with ,generator-sym =
-	  (relative-time-generator ,anchor-sym ,relative-time
-				   :reverse ,reverse)
+	    (relative-time-generator ,anchor-sym ,relative-time
+				     :reverse ,reverse)
 	  for value = (funcall ,generator-sym)
 	  while ,(if reverse
 		     (if inclusive-p
