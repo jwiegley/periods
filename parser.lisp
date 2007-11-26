@@ -294,105 +294,66 @@
   (multiple-value-bind (ok value) (time-parser string)
     (if ok value nil)))
 
-(defun compile-duration (data &optional verbose)
-  (let (new-list)
-    (do ((old data (cdr old)))
-	((null old))
-      (if (keywordp (first old))
-	  (ecase (first old)
-	    (:year
-	     (push :years new-list))
-	    (:month
-	     (push :months new-list))
-	    (:week
-	     (push :days new-list)
-	     (push (* 7 (first (rest old))) new-list)
-	     (setf old (rest old)))
-	    (:day
-	     (push :days new-list))
-	    (:hour
-	     (push :hours new-list))
-	    (:minute
-	     (push :minutes new-list))
-	    (:second
-	     (push :seconds new-list))
-	    (:millisecond
-	     (push :milliseconds new-list)))
-	  (progn
-	    (assert (integerp (first old)))
-	    (push (first old) new-list))))
-    (lambda (anchor)
-      (time-range :duration (apply #'duration (nreverse new-list))
-		  :anchor anchor))))
-
 (defun compile-relative-time (data)
-  (let ((args (car (rest data))))
-    (labels
-	((fix-time (anchor resolution)
-	   (declare (type fixed-time anchor))
-	   (declare (type keyword resolution))
-	   (floor-time anchor resolution))
-	 (find-time (anchor reference)
-	   (declare (type fixed-time anchor))
-	   (declare (type relative-time reference))
-	   (previous-time anchor reference :accept-anchor t)))
-      (case (first data)
-	(:this
-	 (let ((reference (compile-time (cadr data)))
-	       (resolution (find-smallest-resolution (cadr data))))
-	   ;; jww (2007-11-23): Handle days of the week differently here;
-	   ;; "this sunday" uses a different kind of offset from "this month"
-	   (lambda (anchor)
-	     (let ((range (funcall reference anchor)))
-	       (unless (or (get-range-begin range)
-			   (get-range-end range))
-		 (setf (get-range-begin range) anchor))))))
+  (case (first data)
+    (:this (compile-time (cadr data)))
+    (:last
+     (let ((reference (compile-time (cadr data))))
+       (lambda (anchor)
+	 (time-range-previous (funcall reference anchor)))))
+    (:next
+     (let ((reference (compile-time (cadr data))))
+       (lambda (anchor)
+	 (time-range-next (funcall reference anchor)))))
 
-	(:last
-	 (let ((reference (compile-time (cadr data)))
-	       (resolution (find-smallest-resolution (cadr data))))
-	   (lambda (anchor)
-	     (let ((range (funcall reference anchor)))
-	       (unless (or (get-range-begin range)
-			   (get-range-end range))
-		 (setf (get-range-begin range) anchor))))))
+    (:before
+     (let ((reference (compile-time (cadr data))))
+       (lambda (anchor)
+	 (time-range :end (time-range-begin
+			   (funcall reference anchor))
+		     :anchor anchor))))
 
-	(:next
-	 )
+    (:after
+     (let ((reference (compile-time (cadr data))))
+       (lambda (anchor)
+	 (time-range :begin (time-range-end
+			     (funcall reference anchor))
+		     :anchor anchor))))
 
-	(:before
-	 )
-
-	(:after
-	 )
-
-	(otherwise
-	 (let ((reltime (apply #'relative-time data))
-	       (smallest-resolution (find-smallest-resolution data)))
-	   (lambda (anchor)
-	     (floor-time (previous-time anchor reltime :accept-anchor t)
-			 smallest-resolution))))))))
+    (otherwise
+     (let ((reltime (apply #'relative-time data))
+	   (duration (compile-duration data)))
+       (lambda (anchor)
+	 (time-range :begin    reltime
+		     :duration duration
+		     :anchor   anchor))))))
 
 (defun compile-time (data &optional verbose)
   (if (keywordp (first data))
       (case (first data)
 	(:fixed
-	 (let ((result (apply #'fixed-time (rest data))))
-	   (if verbose (format t "Compiling FIXED-TIME: ~S~%" result))
-	   result))
+	 (let* ((moment (apply #'fixed-time (rest data)))
+		(smallest-resolution (find-smallest-resolution data))
+		(duration (compile-duration smallest-resolution 1)))
+	   (lambda (anchor)
+	     (declare (ignore anchor))
+	     (time-range :begin moment :duration duration))))
 	(:duration
-	 (let ((result (compile-duration (rest data) verbose)))
-	   (if verbose (format t "Compiling DURATION: ~S~%" result))
-	   result))
+	 (let ((duration (compile-duration data)))
+	   (lambda (anchor)
+	     (time-range :begin anchor :duration duration))))
 	(:rel
-	 (let ((result (compile-relative-time (rest data))))
-	   (if verbose (format t "Compiling RELATIVE-TIME: ~S~%" result))
-	   result))
+	 (let* ((reltime (compile-relative-time (rest data)))
+		(smallest-resolution (find-smallest-resolution data))
+		(duration (compile-duration smallest-resolution 1)))
+	   (lambda (anchor)
+	     (time-range :begin reltime :duration duration
+			 :anchor anchor))))
 	(:every
-	 (let ((result (time-period :step (compile-duration
-					   (rest (first (rest data)))))))
-	   (if verbose (format t "Compiling TIME-PERIOD: ~S~%" result))
-	   result)))
+	 ;; jww (2007-11-26): Create a time period object here -- or must that
+	 ;; be one step removed from this function?
+	 ))
+
       (let (last-result)
 	(dolist (element data)
 	  (let ((result (compile-time element verbose)))
