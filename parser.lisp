@@ -1,3 +1,5 @@
+(declaim (optimize (debug 3) (safety 3) (speed 1) (space 0)))
+
 (in-package :periods)
 
 ;;;_ * Simple numerics
@@ -70,6 +72,8 @@
 
 (defprod p/time-unit ()
   (/
+   (^ "nanosecond" :nanosecond)
+   (^ "microsecond" :microsecond)
    (^ "millisecond" :millisecond)
    (^ "second" :second)
    (^ "minute" :minute)
@@ -81,6 +85,8 @@
 
 (defprod p/period-unit ()
   (/
+   (^ "per nanosecond"  (list :every (list :duration :nanosecond 1)))
+   (^ "per microsecond"  (list :every (list :duration :microsecond 1)))
    (^ "per millisecond"  (list :every (list :duration :millisecond 1)))
    (^ "per second"       (list :every (list :duration :second 1)))
    (^ "per minute"       (list :every (list :duration :minute 1)))
@@ -139,19 +145,19 @@
 
 (defprod p/relative-time ()
   (/
-   (^ ("this" (? p/ws p/time-reference))
-      (list :rel :this p/time-reference))
-
-   ;; jww (2007-11-23): I don't handle "the 2 months after january", which
-   ;; means something very different from "2 months after january"
-   (^ ((/ ((/ "the" "this") (? (p/ws (/ "next" "following"))))
-	  "next")
-       (? p/ws p/time-reference))
+   (^ ("the" p/ws p/time-reference)
       (list :rel :next p/time-reference))
 
-   (^ ((/ ((/ "the" "this") (p/ws (/ "last" "previous" "preceeding")))
-	  "last")
-       (? p/ws p/time-reference))
+   (^ ("this" p/ws p/time-reference)
+      (list :rel :this
+	    (if (eq :duration (car p/time-reference))
+		(cons :rel (rest p/time-reference))
+		p/time-reference)))
+
+   (^ ((/ "next" "following") p/ws p/time-reference)
+      (list :rel :next p/time-reference))
+
+   (^ ((/ "last" "previous" "preceeding") p/ws p/time-reference)
       (list :rel :last p/time-reference))
 
    (^ ((/ p/cardinal ((? "the" p/ws) p/ordinal))
@@ -294,13 +300,59 @@
   (multiple-value-bind (ok value) (time-parser string)
     (if ok value nil)))
 
+(defun compile-duration (data)
+  (let (new-list)
+    (do ((old data (cdr old)))
+	((null old))
+      (if (keywordp (first old))
+	  (ecase (first old)
+	    (:year
+	     (push :years new-list))
+	    (:month
+	     (push :months new-list))
+	    (:week
+	     (push :days new-list)
+	     (push (* 7 (first (rest old))) new-list)
+	     (setf old (rest old)))
+	    (:day
+	     (push :days new-list))
+	    (:hour
+	     (push :hours new-list))
+	    (:minute
+	     (push :minutes new-list))
+	    (:second
+	     (push :seconds new-list))
+	    (:millisecond
+	     (push :milliseconds new-list))
+	    (:microsecond
+	     (push :microseconds new-list))
+	    (:nanosecond
+	     (push :nanoseconds new-list)))
+	  (progn
+	    (assert (integerp (first old)))
+	    (push (first old) new-list))))
+    (lambda (anchor)
+      (time-range :duration (apply #'duration (nreverse new-list))
+		  :anchor anchor))))
+
 (defun compile-relative-time (data)
   (case (first data)
     (:this (compile-time (cadr data)))
     (:last
      (let ((reference (compile-time (cadr data))))
+       ;; What about the difference between these:
+       ;;   the last two months
+       ;;   the last month
+       ;;   last month
+       ;; jww (2007-11-27): At the moment, all three forms present as having a
+       ;; duration next on the list, which is not correct.  The last one
+       ;; should be a relative time unit.
        (lambda (anchor)
-	 (time-range-previous (funcall reference anchor)))))
+	 (let ((range (funcall reference anchor)))
+	   (if (get-range-begin range)
+	       (time-range-previous range)
+	       (time-range :begin ))))))
+
     (:next
      (let ((reference (compile-time (cadr data))))
        (lambda (anchor)
@@ -328,40 +380,37 @@
 		     :duration duration
 		     :anchor   anchor))))))
 
-(defun compile-time (data &optional verbose)
+(defun compile-time (data)
   (if (keywordp (first data))
       (case (first data)
 	(:fixed
 	 (let* ((moment (apply #'fixed-time (rest data)))
-		(smallest-resolution (find-smallest-resolution data))
-		(duration (compile-duration smallest-resolution 1)))
+		(smallest-resolution (find-smallest-resolution (rest data)))
+		(duration (compile-duration (list smallest-resolution 1))))
 	   (lambda (anchor)
 	     (declare (ignore anchor))
 	     (time-range :begin moment :duration duration))))
 	(:duration
-	 (let ((duration (compile-duration data)))
+	 (let ((duration (compile-duration (rest data))))
 	   (lambda (anchor)
-	     (time-range :begin anchor :duration duration))))
-	(:rel
-	 (let* ((reltime (compile-relative-time (rest data)))
-		(smallest-resolution (find-smallest-resolution data))
-		(duration (compile-duration smallest-resolution 1)))
-	   (lambda (anchor)
-	     (time-range :begin reltime :duration duration
-			 :anchor anchor))))
+	     (time-range :begin anchor
+			 :duration (time-range-duration
+				    (funcall duration anchor))))))
+	(:rel (compile-relative-time (rest data)))
 	(:every
 	 ;; jww (2007-11-26): Create a time period object here -- or must that
 	 ;; be one step removed from this function?
-	 ))
+	 (assert "Compiling of period expressions not yet supported")))
 
-      (let (last-result)
+      (let (result)
 	(dolist (element data)
-	  (let ((result (compile-time element verbose)))
-	    (setf last-result (if last-result
-				  (funcall (the function result)
-					   last-result)
-				  result))))
-	last-result)))
+	  (let ((function (compile-time element)))
+	    (setf result
+		  (if result
+		      (lambda (anchor)
+			(funcall function (funcall result anchor)))
+		      function))))
+	(or result #'identity))))
 
 (defmacro tdp (production input)
   `((lambda (x)
