@@ -155,14 +155,24 @@
 		p/time-reference)))
 
    (^ ((/ "next" "following") p/ws p/time-reference)
-      (list :rel :next p/time-reference))
+      (list :rel :next
+	    (if (eq :duration (car p/time-reference))
+		(cons :rel (rest p/time-reference))
+		p/time-reference)))
 
    (^ ((/ "last" "previous" "preceeding") p/ws p/time-reference)
-      (list :rel :last p/time-reference))
+      (list :rel :last
+	    (if (eq :duration (car p/time-reference))
+		(cons :rel (rest p/time-reference))
+		p/time-reference)))
 
-   (^ ((/ p/cardinal ((? "the" p/ws) p/ordinal))
-       p/ws p/time-reference (? #\s))
-      (list (or p/cardinal p/ordinal) p/time-reference))
+   (^ (p/cardinal p/ws p/time-reference (? #\s))
+      (list p/cardinal p/time-reference))
+
+   (^ ((? "the" p/ws) p/ordinal p/ws p/time-reference (? #\s))
+      (list p/ordinal (if (eq :duration (car p/time-reference))
+			  (cons :rel (rest p/time-reference))
+			  p/time-reference)))
 
    (^ ((/ "before" "prior to" "prior") p/ws p/time-reference)
       (list :rel :before p/time-reference))
@@ -215,44 +225,47 @@
    (^ p/time-duration  p/time-duration)
    (^ p/relative-time  p/relative-time)))
 
-(defprod p/qualified-time (quantity everyp)
-  (^ ((^ ((? (^ "every"
-		(setf everyp t)) p/ws) p/time-reference)
-	 (setf quantity
-	       (if everyp
-		   (list :every p/time-reference)
-		   p/time-reference)))
-      (? (+ p/ws
-	    (^ p/qualified-time
-	       (setf quantity (list quantity p/qualified-time))))))
-     quantity))
+(defun peek-token (in &optional (eof-error-p t)))
+(defun read-token (in &optional (eof-error-p t)))
 
-(defprod p/time (quantity)
-  (^ ((^ p/qualified-time (setf quantity p/qualified-time))
-      (? p/ws (^ "ago"
-		 (setf quantity (list :ago quantity)))))
-     quantity))
+(defun p/qualified-time (in)
+  (let ((everyp (eq (peek-token in) 'every))
+	result)
+    (if everyp (read-token in))
+    (let ((time (p/time-reference in)))
+      (setf result (if everyp
+		       (list :every time)
+		       time)))
+    (loop for time = (p/time-reference in nil)
+       while time do (setf result (list result time)))
+    result))
+
+(defun p/time (in)
+  (let ((time (p/qualified-time in)))
+    (if (eq (peek-token in nil) 'ago)
+	(setf time (list :ago time)))
+    time))
 
 ;;;_ * A recurring period of time
 
-(defprod p/time-period ()
-  (/
-   ;; monthly [from now until when]
-   (^ (p/time-step (? (p/ws p/time-range)))
-      (time-period :range p/time-range :step p/time-step :skip nil))
-
-   ;; every 2 weeks for a year ...
-   (^ (p/time-step "for" p/time-duration (? (p/ws p/time-range)))
-      (time-period :range p/time-range :step p/time-step :skip nil))
-
-   ;; (for) 2 hours weekly ...
-   (^ ((? "for") p/time-duration p/time-step (? (p/ws p/time-range)))
-      (time-period :range p/time-range :step p/time-step :skip nil))))
-
-(defprod p/time-step ()
-  (/
-   (^ ("every" p/ws p/time-duration) p/time-duration)
-   (^ p/period-unit p/period-unit)))
+;;(defprod p/time-period ()
+;;  (/
+;;   ;; monthly [from now until when]
+;;   (^ (p/time-step (? (p/ws p/time-range)))
+;;      (time-period :range p/time-range :step p/time-step :skip nil))
+;;
+;;   ;; every 2 weeks for a year ...
+;;   (^ (p/time-step "for" p/time-duration (? (p/ws p/time-range)))
+;;      (time-period :range p/time-range :step p/time-step :skip nil))
+;;
+;;   ;; (for) 2 hours weekly ...
+;;   (^ ((? "for") p/time-duration p/time-step (? (p/ws p/time-range)))
+;;      (time-period :range p/time-range :step p/time-step :skip nil))))
+;;
+;;(defprod p/time-step ()
+;;  (/
+;;   (^ ("every" p/ws p/time-duration) p/time-duration)
+;;   (^ p/period-unit p/period-unit)))
 
 ;;;_ * These are the top level entry points, which return real objects
 
@@ -294,11 +307,11 @@
 ;;  (multiple-value-bind (ok value) (time-period-parser string)
 ;;    (if ok value nil)))
 
-(defparser time-parser (^ p/time))
-
-(defun parse-time (string)
-  (multiple-value-bind (ok value) (time-parser string)
-    (if ok value nil)))
+;;(defparser time-parser (^ p/time))
+;;
+;;(defun parse-time (string)
+;;  (multiple-value-bind (ok value) (time-parser string)
+;;    (if ok value nil)))
 
 (defun compile-duration (data)
   (let (new-list)
@@ -377,7 +390,7 @@
 	   (duration (compile-duration data)))
        (lambda (anchor)
 	 (time-range :begin    reltime
-		     :duration duration
+		     :duration (funcall duration anchor)
 		     :anchor   anchor))))))
 
 (defun compile-time (data)
@@ -388,8 +401,8 @@
 		(smallest-resolution (find-smallest-resolution (rest data)))
 		(duration (compile-duration (list smallest-resolution 1))))
 	   (lambda (anchor)
-	     (declare (ignore anchor))
-	     (time-range :begin moment :duration duration))))
+	     (time-range :begin moment
+			 :duration (funcall duration anchor)))))
 	(:duration
 	 (let ((duration (compile-duration (rest data))))
 	   (lambda (anchor)
@@ -412,10 +425,10 @@
 		      function))))
 	(or result #'identity))))
 
-(defmacro tdp (production input)
-  `((lambda (x)
-      (parselet ((foo (^ ,production)))
-        (foo x))) ,input))
+;;(defmacro tdp (production input)
+;;  `((lambda (x)
+;;      (parselet ((foo (^ ,production)))
+;;        (foo x))) ,input))
 
 (defun time-parser-tests ()
   (dolist
@@ -442,4 +455,4 @@
 	      "the last week of last year"
 	      ))
     (format t "EXPR <  ~A~%     >= ~S~%" expr
-	    (parse-time expr))))
+	    (p/time (make-string-input-stream expr)))))
