@@ -44,9 +44,7 @@
 (declaim (optimize (debug 3) (safety 3) (speed 1) (space 0)))
 
 (defpackage :periods
-  (:use :common-lisp :local-time
-	#+:periods-use-series :series
-	#+:periods-use-parser :com.gigamonkeys.parser)
+  (:use :common-lisp :local-time #+:periods-use-series :series)
   (:nicknames :time-periods)
   (:export leapp
 	   days-in-month

@@ -2,41 +2,61 @@
 
 (in-package :periods)
 
+(defmacro if-let (((var value)) &body body)
+  `(let ((,var ,value))
+     (if ,var
+	 (progn ,@body))))
+
 ;;;_ * Simple numerics
 
-(defvar *next-token* nil)
+(defparameter *token-stack* nil)
+(defparameter *parser-readtable* (copy-readtable nil))
+
+(defun ignore-character (stream char)
+  (declare (ignore stream))
+  (declare (ignore char))
+  (values))
+
+(set-macro-character #\, #'ignore-character nil *parser-readtable*)
+(set-macro-character #\/ #'ignore-character nil *parser-readtable*)
+
+(defun read-from-stream (in &optional (eof-error-p t))
+  (peek-char t in eof-error-p)		; skip whitespace
+  (let ((*readtable* *parser-readtable*))
+    (read in eof-error-p)))
 
 (defun peek-token (in &optional (eof-error-p t))
-  (or *next-token*
+  (or (first *token-stack*)
       (progn
 	(peek-char t in eof-error-p)	; skip whitespace
-	(setf *next-token* (read in eof-error-p)))))
+	(let ((token (read-from-stream in eof-error-p)))
+	  (if token
+	      (progn
+		(push token *token-stack*)
+		token)
+	      (if eof-error-p
+		  (error "End of input stream")))))))
 
 (defun read-token (in &optional (eof-error-p t))
-  (if *next-token*
-      (prog1
-	  *next-token*
-	(setf *next-token* nil))
-      (progn
-	(peek-char t in eof-error-p)	; skip whitespace
-	(read in eof-error-p))))
+  (or (pop *token-stack*)
+      (read-from-stream in eof-error-p)))
 
 (defun unread-token (in token)
   (declare (ignore in))
-  (assert (null *next-token*))
-  (setf *next-token* token))
+  (push token *token-stack*)
+  nil)
 
 ;;;_  + Coded
 
-(defun p/number (in)
-  (if (digit-char-p (peek-char t in))
-      (read in)))
+(defun p/number (in &optional (eof-error-p t))
+  (and (integerp (peek-token in eof-error-p))
+       (read-token in)))
 
 ;;;_  + English units
 
-(defun p/cardinal (in)
-  (or (p/number in)
-      (let ((token (peek-token in)))
+(defun p/cardinal (in &optional (eof-error-p t))
+  (or (p/number in eof-error-p)
+      (let ((token (peek-token in eof-error-p)))
 	(case token
 	  (one (read-token in) 1)
 	  (two (read-token in) 2)
@@ -49,8 +69,8 @@
 	  (nine (read-token in) 9)
 	  (ten (read-token in) 10)))))
 
-(defun p/ordinal (in)
-  (let ((token (peek-token in)))
+(defun p/ordinal (in &optional (eof-error-p t))
+  (let ((token (peek-token in eof-error-p)))
     ;; jww (2007-11-28): I no longer parse "the other week", or "every other
     ;; week"
     (case token
@@ -65,8 +85,8 @@
       ((9th ninth) (read-token in) (list :ordinal 9))
       ((10th tenth) (read-token in) (list :ordinal 10)))))
 
-(defun p/days-of-week (in)
-  (let ((token (peek-token in)))
+(defun p/days-of-week (in &optional (eof-error-p t))
+  (let ((token (peek-token in eof-error-p)))
     (case token
       (sunday (read-token in) (list :day-of-week 0))
       (monday (read-token in) (list :day-of-week 1))
@@ -76,8 +96,8 @@
       (friday (read-token in) (list :day-of-week 5))
       (saturday (read-token in) (list :day-of-week 6)))))
 
-(defun p/months-of-year (in)
-  (let ((token (peek-token in)))
+(defun p/months-of-year (in &optional (eof-error-p t))
+  (let ((token (peek-token in eof-error-p)))
     (case token
       ((January january Jan jan) (read-token in) (list :month 1))
       ((February february Feb feb) (read-token in) (list :month 2))
@@ -92,8 +112,8 @@
       ((November november Nov nov) (read-token in) (list :month 11))
       ((December december Dec dec) (read-token in) (list :month 12)))))
 
-(defun p/time-unit (in)
-  (let ((token (peek-token in)))
+(defun p/time-unit (in &optional (eof-error-p t))
+  (let ((token (peek-token in eof-error-p)))
     (case token
       ((nanosecond nanoseconds) (read-token in) :nanosecond)
       ((microsecond microseconds) (read-token in) :microsecond)
@@ -106,13 +126,12 @@
       ((month months) (read-token in) :month)
       ((year years) (read-token in) :year))))
 
-(defun p/period-unit (in)
-  (let ((token (peek-token in)))
+(defun p/period-unit (in &optional (eof-error-p t))
+  (let ((token (peek-token in eof-error-p)))
     (if (eq token 'per)
 	(progn
 	  (read-token in)
-	  (setf token (read-token in))
-	  (case token
+	  (case (peek-token in eof-error-p)
 	    (nanosecond
 	     (read-token in) (list :every (list :duration :nanosecond 1)))
 	    (microsecond (read-token in)
@@ -121,7 +140,14 @@
 			 (list :every (list :duration :millisecond 1)))
 	    (second (read-token in) (list :every (list :duration :second 1)))
 	    (minute (read-token in) (list :every (list :duration :minute 1)))
-	    ))
+	    (hour (read-token in) (list :every (list :duration :hour 1)))
+	    (day (read-token in) (list :every (list :duration :day 1)))
+	    (week (read-token in) (list :every (list :duration :week 1)))
+	    (month (read-token in) (list :every (list :duration :month 1)))
+	    ((year annum)
+	     (read-token in) (list :every (list :duration :year 1)))
+	    (otherwise
+	     (unread-token in 'per))))
 	(case token
 	  (hourly (read-token in) (list :every (list :duration :hour 1)))
 	  (daily (read-token in) (list :every (list :duration :day 1)))
@@ -132,8 +158,8 @@
 
 ;;;_ * A fixed point in time
 
-(defun p/fixed-time (in)
-  (let ((token (peek-token in)))
+(defun p/fixed-time (in &optional (eof-error-p t))
+  (if-let ((token (peek-token in eof-error-p)))
     (case token
       (now (read-token in) (list :fixed :now))
 
@@ -142,146 +168,157 @@
       (yesterday (read-token in) (list :rel :yesterday))
 
       (otherwise
-       (let ((months-of-year (p/months-of-year in)))
+       (let ((months-of-year (p/months-of-year in eof-error-p)))
 	 (if months-of-year
-	     (let ((number (or (p/cardinal in)
-			       (p/ordinal in))))
+	     (if-let ((number (or (cadr (p/ordinal in eof-error-p))
+				  (p/cardinal in eof-error-p))))
 	       (list :rel :this
 		     (append (list :rel) months-of-year
 			     (if number
 				 (list (if (> number 40) :year :day)
 				       number)))))
-	     (let ((first (p/number in)))
-	       (when first
-		 (if (char= #\/ (peek-char nil in))
-		     (let ((second (p/number in)))
-		       (if (char= #\/ (peek-char nil in))
-			   (let ((third (p/number in)))
-			     ;; jww (2007-11-28): Backtrack all the way if
-			     ;; this fails!
-			     (when third
-			       (list :fixed :year first :month second
-				     :day third)))
-			   (list :fixed :year first :month second)))
+	     (if-let ((first (p/number in eof-error-p)))
+	       (if-let ((ch (peek-char nil in nil)))
+		 (if (char= #\/ ch)
 		     (progn
-		       (unread-token in first)
-		       nil))))))))))
+		       (read-char in)
+		       (let ((second (p/number in eof-error-p)))
+			 (if second
+			     (let ((ch (peek-char nil in nil)))
+			       (if (and ch (char= #\/ ch))
+				   (progn
+				     (read-char in)
+				     (let ((third (p/number in eof-error-p)))
+				       (if third
+					   (list :fixed
+						 :year first
+						 :month second
+						 :day third)
+					   (error "Failed to read literal date string"))))
+				   (list :fixed :year first :month second)))
+			     (error "Failed to read literal date string"))))
+		     (unread-token in first))))))))))
 
 ;;;_ * A duration of time
 
-(defun p/time-duration (in)
-  (let ((duration (p/duration-spec in)))
-    (when duration
-      ;; jww (2007-11-28): I don't support "3 months, 2 weeks" yet
-      (loop for and-next-p = (eq 'and (peek-token in))
-	 while and-next-p do (nconc duration (p/duration-spec in)))
-      (cons :duration duration))))
+(defun p/time-duration (in &optional (eof-error-p t))
+  (if-let ((duration (p/duration-spec in eof-error-p)))
+    ;; jww (2007-11-28): I don't support "3 months, 2 weeks" yet
+    (loop while (eq 'and (peek-token in nil)) do
+	 (read-token in)
+	 (nconc duration (p/duration-spec in eof-error-p)))
+    (cons :duration duration)))
 
-(defun p/duration-spec (in)
-  (let ((number (p/cardinal in)))
+(defun p/duration-spec (in &optional (eof-error-p t))
+  (let ((number (p/cardinal in eof-error-p)))
     (if number
-	;; jww (2007-11-28): What if this fails?
-	(list (p/time-unit in) number)
+	(let ((unit (p/time-unit in eof-error-p)))
+	  (if unit
+	      (list unit number)
+	      (unread-token in number)))
 	(progn
-	  (if (eq 'a (peek-token in))
+	  (if (eq 'a (peek-token in eof-error-p))
 	      (read-token in))
-	  ;; jww (2007-11-28): Check for error
-	  (list (p/time-unit in) 1)))))
+	  (if-let ((unit (p/time-unit in eof-error-p)))
+	    (list unit 1))))))
 
 ;;;_ * A relative point in time
 
-(defun p/relative-time (in)
-  (let ((number (p/cardinal in)))
-    (if number
-	(list number (p/time-reference in))
-	(case (peek-token in)
-	  (the (list :rel :next (p/time-reference in)))
+(defun p/relative-time (in &optional (eof-error-p t))
+  (let ((token (read-token in eof-error-p)))
+    (case token
+      (the (list :rel :next (p/time-reference in)))
 
-	  (this
-	   (let ((reference (p/time-reference in)))
-	     (list :rel :this
-		   (if (eq :duration (car reference))
-		       (cons :rel (rest reference))
-		       reference))))
+      (this
+       (let ((reference (p/time-reference in)))
+	 (list :rel :this
+	       (if (eq :duration (car reference))
+		   (cons :rel (rest reference))
+		   reference))))
 
-	  ((next following)
-	   (let ((reference (p/time-reference in)))
-	     (list :rel :next
-		   (if (eq :duration (car reference))
-		       (cons :rel (rest reference))
-		       reference))))
+      ((next following)
+       (let ((reference (p/time-reference in)))
+	 (list :rel :next
+	       (if (eq :duration (car reference))
+		   (cons :rel (rest reference))
+		   reference))))
 
-	  ((last previous preceeding)
-	   (let ((reference (p/time-reference in)))
-	     (list :rel :last
-		   (if (eq :duration (car reference))
-		       (cons :rel (rest reference))
-		       reference))))
+      ((last previous preceeding)
+       (let ((reference (p/time-reference in)))
+	 (list :rel :last
+	       (if (eq :duration (car reference))
+		   (cons :rel (rest reference))
+		   reference))))
 
 ;;;	  (((? the p/ws) p/ordinal p/ws p/time-reference (? #\s))
 ;;;	   (list p/ordinal (if (eq :duration (car p/time-reference))
 ;;;			       (cons :rel (rest p/time-reference))
 ;;;			       p/time-reference)))
 
-	  ((before prior)
-	   (list :rel :before (p/time-reference in)))
+      ((before prior)
+       (list :rel :before (p/time-reference in)))
 
-	  (after
-	   (list :rel :after (p/time-reference in)))
+      (after
+       (list :rel :after (p/time-reference in)))
 
-	  ((beginning ;; (the p/ws beginning p/ws of)
-	    )
-	   (list :rel :begin (p/time-reference in)))
+      ((beginning ;; (the p/ws beginning p/ws of)
+	)
+       (list :rel :begin (p/time-reference in)))
 
-	  (( ;; (the p/ws beginning p/ws of)
-	    starting
-	    ;; (the p/ws start p/ws of)
-	    from
-	    since)
-	   (list :rel :from (p/time-reference in)))
+      (( ;; (the p/ws beginning p/ws of)
+	starting
+	;; (the p/ws start p/ws of)
+	from
+	since)
+       (list :rel :from (p/time-reference in)))
 
-	  ((in during)
-	   (list :rel :in (p/time-reference in)))
+      ((in during)
+       (list :rel :in (p/time-reference in)))
    
-	  ((/ ;; (the p/ws end p/ws of)
-	      stopping
-	      finishing
-	      to
-	      until)
-	   (list :rel :to (p/time-reference in)))
+      ((/ ;; (the p/ws end p/ws of)
+	stopping
+	finishing
+	to
+	until)
+       (list :rel :to (p/time-reference in)))
 
-	  (of
-	   (list :rel :of (p/time-reference in)))
+      (of
+       (list :rel :of (p/time-reference in)))
    
-	  ((ending
-	    ;; (the p/ws end p/ws of)
-	    )
-	   (list :rel :end (p/time-reference in)))))))
+      ((ending
+	;; (the p/ws end p/ws of)
+	)
+       (list :rel :end (p/time-reference in)))
 
-(defun p/time-reference (in)
-  (or (p/fixed-time in)
-      (p/days-of-week in)
-      (p/period-unit in)
-      (p/time-duration in)
-      (p/relative-time in)))
+      (otherwise
+       (unread-token in token)))))
 
-(defun p/qualified-time (in)
-  (let ((everyp (eq (peek-token in) 'every))
+(defun p/time-reference (in &optional (eof-error-p t))
+  (or (p/fixed-time in eof-error-p)
+      (p/days-of-week in eof-error-p)
+      (p/period-unit in eof-error-p)
+      (p/time-duration in eof-error-p)
+      (p/relative-time in eof-error-p)))
+
+(defun p/qualified-time (in &optional (eof-error-p t))
+  (let ((everyp (eq (peek-token in eof-error-p) 'every))
 	result)
-    (if everyp (read-token in))
-    (let ((time (p/time-reference in)))
-      (setf result (if everyp
-		       (list :every time)
-		       time)))
-    (loop for time = (p/time-reference in)
-       while time do (setf result (list result time)))
+    (if-let ((time (p/time-reference in eof-error-p)))
+      (setf result (if everyp (progn
+				(read-token in)
+				(list :every time))
+		       time))
+      (loop for time = (p/time-reference in nil) while time do
+	   (setf result (list result time))))
     result))
 
-(defun p/time (in)
-  (let ((time (p/qualified-time in)))
+(defun p/time (in &optional (eof-error-p t))
+  (if-let ((time (p/qualified-time in eof-error-p)))
     (if (eq (peek-token in nil) 'ago)
-	(setf time (list :ago time)))
-    time))
+	(progn
+	  (read-token in)
+	  (setf time (list :ago time)))
+	time)))
 
 ;;;_ * A recurring period of time
 
@@ -291,28 +328,19 @@
 	((null old))
       (if (keywordp (first old))
 	  (ecase (first old)
-	    (:year
-	     (push :years new-list))
-	    (:month
-	     (push :months new-list))
+	    (:year (push :years new-list))
+	    (:month (push :months new-list))
 	    (:week
 	     (push :days new-list)
 	     (push (* 7 (first (rest old))) new-list)
 	     (setf old (rest old)))
-	    (:day
-	     (push :days new-list))
-	    (:hour
-	     (push :hours new-list))
-	    (:minute
-	     (push :minutes new-list))
-	    (:second
-	     (push :seconds new-list))
-	    (:millisecond
-	     (push :milliseconds new-list))
-	    (:microsecond
-	     (push :microseconds new-list))
-	    (:nanosecond
-	     (push :nanoseconds new-list)))
+	    (:day (push :days new-list))
+	    (:hour (push :hours new-list))
+	    (:minute (push :minutes new-list))
+	    (:second (push :seconds new-list))
+	    (:millisecond (push :milliseconds new-list))
+	    (:microsecond (push :microseconds new-list))
+	    (:nanosecond (push :nanoseconds new-list)))
 	  (progn
 	    (assert (integerp (first old)))
 	    (push (first old) new-list))))

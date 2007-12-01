@@ -46,7 +46,6 @@ for diagnostic output.")
   :serial t
   :version #.*periods-version*
   :depends-on (:local-time #+:periods-use-series :series)
-  :components (#+:periods-use-parser (:file "monkey-parser")
-	       (:file "periods")
+  :components ((:file "periods")
 	       (:file "strptime")
-	       #+:periods-use-parser (:file "parser")))
+	       (:file "parser")))
