@@ -430,7 +430,8 @@
 	(or result #'identity))))
 
 (defun parse-time-period (string)
-  (funcall (compile-time (p/time (make-string-input-stream string))) (now)))
+  (funcall (compile-time (p/time (make-string-input-stream string)))
+	   (fixed-time :hour 0)))
 
 (defun parse-time-range (string)
   ;; jww (2007-12-01): The call to fixed-time here should be sensitive to the
@@ -461,6 +462,7 @@
 	      "monthly from the beginning of this year"
 	      "monthly from now until the end of the year"
 	      "the last week of last year"
+	      ;; "every weekend this year"
 	      ))
     (format t "EXPR <  ~A~%     >= ~S~%" expr
 	    (p/time (make-string-input-stream expr)))))
