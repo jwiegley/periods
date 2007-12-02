@@ -52,8 +52,13 @@
 	   decrement-time
 	   floor-time
 	   parse-time-period
+	   parse-time-range
 	   time-period-generator
 	   time-periods
+	   time-period
+	   time-range
+	   time-range-duration
+	   time-within-range-p
 	   map-over-time
 	   do-over-time
 	   collate-by-time-period
@@ -1718,7 +1723,7 @@
 		 (next-begin (if skip-stepper
 				 (funcall skip-stepper begin)
 				 this-end)))
-	    (when end
+	    (when (and end next-begin)
 	      (if (if end-inclusive-p
 		      (local-time> next-begin end)
 		      (local-time>= next-begin end))
@@ -1756,14 +1761,12 @@
 
 #+periods-use-series
 (defun scan-time-period (period)
-  (declare (optimizable-series-function))
-  (multiple-value-bind (begins ends next-begins)
-      (map-fn '(values
-		(or fixed-time null)
-		(or fixed-time null)
-		(or fixed-time null))
-	      (time-period-generator period))
-    (until-if #'null begins ends next-begins)))
+  (multiple-value-call #'until-if
+    #'null (map-fn '(values
+		     (or fixed-time null)
+		     (or fixed-time null)
+		     (or fixed-time null))
+		   (time-period-generator period))))
 
 ;;;_ * Library functions
 
@@ -1775,20 +1778,20 @@
   period, and the other is a series of ranges, each element of which
   corresponds to the group elements in the same position within the first
   series."
-  (let (next-series)
-    (multiple-value-call #'map-fn
-      '(values fixed-time fixed-time series)
+  (multiple-value-call #'map-fn
+    '(values fixed-time fixed-time series)
+    (let (next-series)
       #'(lambda (begin end next-begin)
 	  (declare (ignore next-begin))
-	  (list begin end
-		(let (matching)
-		  (multiple-value-setq (matching next-series)
-		    (split-if (or next-series item-series)
-			      #'(lambda (item)
-				  (time-within-begin-end-p
-				   (funcall key item) begin end))))
-		  matching)))
-      (scan-time-period period))))
+	  (values begin end
+		  (let (matching)
+		    (multiple-value-setq (matching next-series)
+		      (split-if (or next-series item-series)
+				#'(lambda (item)
+				    (time-within-begin-end-p
+				     (funcall key item) begin end))))
+		    matching))))
+    (scan-time-period period)))
 
 ;;;_  + General purpose
 

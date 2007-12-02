@@ -22,7 +22,8 @@
 
 (defun read-from-stream (in &optional (eof-error-p t))
   (peek-char t in eof-error-p)		; skip whitespace
-  (let ((*readtable* *parser-readtable*))
+  (let ((*readtable* *parser-readtable*)
+	(*package* (find-package :periods)))
     (read in eof-error-p)))
 
 (defun peek-token (in &optional (eof-error-p t))
@@ -170,8 +171,8 @@
       (otherwise
        (let ((months-of-year (p/months-of-year in eof-error-p)))
 	 (if months-of-year
-	     (if-let ((number (or (cadr (p/ordinal in eof-error-p))
-				  (p/cardinal in eof-error-p))))
+	     (let ((number (or (cadr (p/ordinal in nil))
+			       (p/cardinal in nil))))
 	       (list :rel :this
 		     (append (list :rel) months-of-year
 			     (if number
@@ -386,11 +387,13 @@
 		     :anchor anchor))))
 
     (otherwise
-     (let ((reltime (apply #'relative-time data))
-	   (duration (compile-duration data)))
+     (let* ((reltime (apply #'relative-time data))
+	    (smallest-resolution (find-smallest-resolution data))
+	    (duration (compile-duration (list smallest-resolution 1))))
        (lambda (anchor)
 	 (time-range :begin    reltime
-		     :duration (funcall duration anchor)
+		     :duration (time-range-duration
+				(funcall duration anchor))
 		     :anchor   anchor))))))
 
 (defun compile-time (data)
@@ -402,7 +405,8 @@
 		(duration (compile-duration (list smallest-resolution 1))))
 	   (lambda (anchor)
 	     (time-range :begin moment
-			 :duration (funcall duration anchor)))))
+			 :duration (time-range-duration
+				    (funcall duration anchor))))))
 	(:duration
 	 (let ((duration (compile-duration (rest data))))
 	   (lambda (anchor)
@@ -424,6 +428,15 @@
 			(funcall function (funcall result anchor)))
 		      function))))
 	(or result #'identity))))
+
+(defun parse-time-period (string)
+  (funcall (compile-time (p/time (make-string-input-stream string))) (now)))
+
+(defun parse-time-range (string)
+  ;; jww (2007-12-01): The call to fixed-time here should be sensitive to the
+  ;; input precision
+  (funcall (compile-time (p/time (make-string-input-stream string)))
+	   (fixed-time :hour 0)))
 
 (defun time-parser-tests ()
   (dolist
