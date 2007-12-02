@@ -225,6 +225,40 @@
 
 ;;;_ * A relative point in time
 
+(defun make-duration-relative (data)
+  (let (new-list)
+    (loop for arg in (rest data) do
+	 (when (keywordp arg)
+	   (ecase arg
+	     (:year
+	      (push :month new-list)
+	      (push 1 new-list))
+	     (:month
+	      (push :day new-list)
+	      (push 1 new-list))
+	     (:week
+	      (push :day-of-week new-list)
+	      (push 0 new-list))
+	     (:day
+	      (push :hour new-list)
+	      (push 0 new-list))
+	     (:hour
+	      (push :minute new-list)
+	      (push 0 new-list))
+	     (:minute
+	      (push :second new-list)
+	      (push 0 new-list))
+	     (:second
+	      (push :millisecond new-list)
+	      (push 0 new-list))
+	     (:millisecond
+	      (push :microsecond new-list)
+	      (push 0 new-list))
+	     (:microsecond
+	      (push :nanosecond new-list)
+	      (push 0 new-list)))))
+    (cons :rel (nreverse new-list))))
+
 (defun p/relative-time (in &optional (eof-error-p t))
   (let ((token (read-token in eof-error-p)))
     (case token
@@ -232,24 +266,30 @@
 
       (this
        (let ((reference (p/time-reference in)))
-	 (list :rel :this
-	       (if (eq :duration (car reference))
-		   (cons :rel (rest reference))
-		   reference))))
+	 (if (eq :duration (car reference))
+	     (list reference
+		   (list :rel :from
+			 (list :rel :this
+			       (make-duration-relative reference))))
+	     (list :rel :this reference))))
 
       ((next following)
        (let ((reference (p/time-reference in)))
-	 (list :rel :next
-	       (if (eq :duration (car reference))
-		   (cons :rel (rest reference))
-		   reference))))
+	 (if (eq :duration (car reference))
+	     (list reference
+		   (list :rel :from
+			 (list :rel :next
+			       (make-duration-relative reference))))
+	     (list :rel :next reference))))
 
       ((last previous preceeding)
        (let ((reference (p/time-reference in)))
-	 (list :rel :last
-	       (if (eq :duration (car reference))
-		   (cons :rel (rest reference))
-		   reference))))
+	 (if (eq :duration (car reference))
+	     (list reference
+		   (list :rel :from
+			 (list :rel :last
+			       (make-duration-relative reference))))
+	     (list :rel :last reference))))
 
 ;;;	  (((? the p/ws) p/ordinal p/ws p/time-reference (? #\s))
 ;;;	   (list p/ordinal (if (eq :duration (car p/time-reference))
@@ -372,13 +412,20 @@
        (lambda (anchor)
 	 (time-range-next (funcall reference anchor)))))
 
-    (:before
+    ;; jww (2007-12-02): is there a distinction here?
+    ((:to :before)
      (let ((reference (compile-time (cadr data))))
        (lambda (anchor)
 	 (time-range :end (time-range-begin
 			   (funcall reference anchor))
 		     :anchor anchor))))
 
+    (:from
+     (let ((reference (compile-time (cadr data))))
+       (lambda (anchor)
+	 (time-range :begin (time-range-begin
+			     (funcall reference anchor))
+		     :anchor anchor))))
     (:after
      (let ((reference (compile-time (cadr data))))
        (lambda (anchor)
@@ -424,8 +471,10 @@
 	  (let ((function (compile-time element)))
 	    (setf result
 		  (if result
-		      (lambda (anchor)
-			(funcall function (funcall result anchor)))
+		      (let ((previous result))
+			(lambda (anchor)
+			  (let ((range (funcall function anchor)))
+			    (funcall previous (time-range-begin range)))))
 		      function))))
 	(or result #'identity))))
 
