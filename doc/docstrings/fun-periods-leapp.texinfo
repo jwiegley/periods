@@ -1,0 +1,5 @@
+@anchor{Function leapp}
+@deffn {Function} leapp year
+@findex leapp
+Return @code{t} if @code{year} falls on a leap year.
+@end deffn

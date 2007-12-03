@@ -63,6 +63,10 @@
 	   do-over-time
 	   collate-by-time-period
 	   sleep-until
+	   day-of-week
+	   falls-on-weekend-p
+	   current-year
+	   find-smallest-resolution
 
 	   *input-time-format*
 	   *output-time-format*
@@ -90,6 +94,7 @@
 ;; Snippet courtesy of Xach on #lisp
 (declaim (inline leapp))
 (defun leapp (year)
+  "Return T if YEAR falls on a leap year."
   (cond ((zerop (mod year 400)) t)
         ((zerop (mod year 100)) nil)
         ((zerop (mod year 4)) t)
@@ -97,7 +102,8 @@
 
 (declaim (inline current-year))
 (defun current-year ()
- (nth-value 5 (get-decoded-time)))
+  "Return the current year as a FIXNUM."
+  (nth-value 5 (get-decoded-time)))
 
 (defun days-in-month (month &optional year)
   (let ((days (aref *days-in-months* (1- month)))
@@ -160,6 +166,14 @@
     (encode-local-time nsec ss mm hh day month year)))
 
 (defun find-smallest-resolution (step-by)
+  "Examine the property list STEP-BY and return the smallest unit of time
+specified.
+
+  For example, given the following property list:
+
+  (:DAY 10 :HOUR 5 :MINUTE 2)
+
+The result is :MINUTE."
   (cond
     ((member :nanosecond step-by) :nanosecond)
     ((member :microsecond step-by) :microsecond)
@@ -178,26 +192,27 @@
   'local-time)
 
 (defun fixed-time (&rest args)
-  "Return a fixed point in time relative to now.
+  "Return a fixed point in time relative to the time of the call.  ARGS is a
+property list giving a specific precision for the return value.
 
   If the keyword argument :NOW is given, all else is ignored; this is
-  equivalent to calling `LOCAL-TIME:NOW'.
+equivalent to calling LOCAL-TIME:NOW.
 
   Otherwise, any keyword arguments given override their corresponding elements
-  in the current time.  Further, any elements smaller in resolution than the
-  finest specified element are reduced to 0 or 1, according to their position.
+in the current time.  Further, any elements smaller in resolution than the
+finest specified element are reduced to 0 or 1, according to their position.
 
-  For example, assuming the current time is @2007-11-17T23:02:00.000, compare
-  these outputs:
+  For example, assuming the current time is \"@2007-11-17T23:02:00.000\",
+compare these outputs:
 
-    (fixed-time :month 4) => @2007-04-01T00:00:00.000
-    (fixed-time :day 10)  => @2007-11-10T00:00:00.000
-    (fixed-time :hour 15) => @2007-11-17T15:00:00.000
+  (fixed-time :month 4) ⇒ @2007-04-01T00:00:00.000
+  (fixed-time :day 10)  ⇒ @2007-11-10T00:00:00.000
+  (fixed-time :hour 15) ⇒ @2007-11-17T15:00:00.000
 
-  This behavior makes it very easy to return a fixed time for \"april of this
-  year\", etc.  If you wish to determine the date of the previous April, while
-  preserving the current day of the month, hour of the day, etc., then see the
-  function `PREVIOUS-TIME'."
+This behavior makes it very easy to return a fixed time for \"april of this
+year\", etc.  If you wish to determine the date of the previous April, while
+preserving the current day of the month, hour of the day, etc., then see the
+function PREVIOUS-TIME."
   (if (member :now args)
       (local-time:now)
       (multiple-value-bind
@@ -276,11 +291,14 @@
 
 (declaim (inline day-of-week))
 (defun day-of-week (fixed-time)
+  "Return the day of the week associated with a given FIXED-TIME.
+The result is a FIXNUM with 0 representing Sunday, through 6 on Saturday."
   (declare (type fixed-time fixed-time))
   (nth-value 7 (decode-local-time fixed-time)))
 
 (declaim (inline falls-on-weekend-p))
 (defun falls-on-weekend-p (fixed-time)
+  "Return T if the given FIXED-TIME occurs on a Saturday or Sunday."
   (let ((dow (day-of-week fixed-time)))
     (or (= 0 dow) (= 6 dow))))
 

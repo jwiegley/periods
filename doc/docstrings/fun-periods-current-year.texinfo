@@ -1,0 +1,5 @@
+@anchor{Function current-year}
+@deffn {Function} current-year
+@findex current-year
+Return the current year as a @code{fixnum}.
+@end deffn

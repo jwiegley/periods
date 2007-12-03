@@ -2,3 +2,6 @@
 \.fsl$
 \.x?fasl$
 \.x86f$
+doc/periods$
+\.pdf$
+\.info$

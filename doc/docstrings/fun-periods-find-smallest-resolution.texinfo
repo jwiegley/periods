@@ -1,0 +1,14 @@
+@anchor{Function find-smallest-resolution}
+@deffn {Function} find-smallest-resolution step-by
+@findex find-smallest-resolution
+Examine the property list @code{step-by} and return the smallest unit of time
+specified.
+
+For example, given the following property list:
+
+@lisp
+(:DAY 10 :HOUR 5 :MINUTE 2)
+@end lisp
+
+The result is @code{:minute}.
+@end deffn

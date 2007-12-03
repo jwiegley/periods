@@ -1,0 +1,27 @@
+@anchor{Function fixed-time}
+@deffn {Function} fixed-time &rest args
+@findex fixed-time
+Return a fixed point in time relative to the time of the call.  @code{args} is a
+property list giving a specific precision for the return value.
+
+If the keyword argument @code{:now} is given, all else is ignored; this is
+equivalent to calling @code{local-time:now}.
+
+Otherwise, any keyword arguments given override their corresponding elements
+in the current time.  Further, any elements smaller in resolution than the
+finest specified element are reduced to 0 or 1, according to their position.
+
+For example, assuming the current time is "@@2007-11-17T23:02:00.000",
+compare these outputs:
+
+@lisp
+(fixed-time :month 4) ⇒ @@2007-04-01T00:00:00.000
+(fixed-time :day 10)  ⇒ @@2007-11-10T00:00:00.000
+(fixed-time :hour 15) ⇒ @@2007-11-17T15:00:00.000
+@end lisp
+
+This behavior makes it very easy to return a fixed time for "april of this
+year", etc.  If you wish to determine the date of the previous April, while
+preserving the current day of the month, hour of the day, etc., then see the
+function @code{previous-time}.
+@end deffn

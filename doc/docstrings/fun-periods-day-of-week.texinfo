@@ -1,0 +1,6 @@
+@anchor{Function day-of-week}
+@deffn {Function} day-of-week fixed-time
+@findex day-of-week
+Return the day of the week associated with a given @code{fixed-time}.
+The result is a @code{fixnum} with 0 representing Sunday, through 6 on Saturday.
+@end deffn

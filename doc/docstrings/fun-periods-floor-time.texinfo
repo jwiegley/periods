@@ -1,0 +1,9 @@
+@anchor{Function floor-time}
+@deffn {Function} floor-time fixed-time &optional resolution
+@findex floor-time
+Reduce a fixed time to be no finer than @code{resolution}.
+
+For example, if the date is 2007-04-20, and the resolution is :month, the
+date is floored to 2007-04-01.  Anything smaller than the resolution is
+reduced to zero (or 1, if it is a day or month being reduced).
+@end deffn

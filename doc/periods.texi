@@ -1,0 +1,234 @@
+\input texinfo  @c -*-texinfo-*-
+
+@setfilename periods.info
+@settitle Periods: A library for manipulating time
+
+@dircategory Common Lisp
+@copying
+Copyright (c) 2007, John Wiegley.  All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+- Redistributions of source code must retain the above copyright
+  notice, this list of conditions and the following disclaimer.
+
+- Redistributions in binary form must reproduce the above copyright
+  notice, this list of conditions and the following disclaimer in the
+  documentation and/or other materials provided with the distribution.
+
+- Neither the name of New Artisans LLC nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+@end copying
+
+@documentencoding utf-8
+
+@iftex
+@finalout
+@end iftex
+
+@titlepage
+@title Periods: A library for manipulating time
+@author John Wiegley
+@end titlepage
+
+@direntry
+* Periods: (periods).           A Common Lisp library for manipulating time.
+@end direntry
+
+@contents
+
+@ifnottex
+@node Top, Introduction, (dir), (dir)
+@top Overview
+
+@insertcopying
+@end ifnottex
+
+@menu
+* Introduction::                
+* Installation::                
+* Fixed time::                  
+* Time durations::              
+* Relative time::               
+* Time ranges::                 
+* Time periods::                
+@end menu
+
+@node Introduction, Installation, Top, Top
+@chapter Introduction
+
+Welcome to the @sc{periods} library.  The intention of this code is to
+provide a convenient set of utilities for manipulating times,
+distances between times, and both contiguous and discontiguous ranges
+of time.  By combining these facilities in various ways, almost any
+type of time expression is possible.
+
+    Consider you are writing a calendaring application which must
+support the idea of recurring tasks.  Often, people using a calendar
+have very certain ideas of what type of recurrence they want---but it
+is not always easy to calculate.  Say they are entering their pay
+days; this could either fall bi-weekly, the second Friday of every
+month, or every 15 days, but the following Monday if that day falls on
+a weekend.  How is your code to calculate these moments in time,
+without resorting to contortionist uses of
+@code{encode-universal-time} and @code{decode-universal-time}?
+
+    By way of a brief introduction to the following sections, here is
+how each of the above time expressions would be calculated.  The first
+three occurrences of each are shown, starting from @samp{Sun, 18 Nov
+2007}:
+
+@float Example,fig:ex1
+@caption{Bi-weekly (every 14 days)}
+@lisp
+(scan-times @@2007-11-18 (duration :days 14))
+   ⇒ #Z(@@2007-12-02 @@2007-12-16 @@2007-12-30 …)
+@end lisp
+@end float
+
+@float Example,fig:ex2
+@caption{Second Friday of every month}
+@lisp
+(mapping ((time (scan-times (previous-time @@2007-11-18
+                                           (relative-time :day 1))
+                            (duration :months 1))))
+  (next-time (next-time time (relative-time :day-of-week 5)
+                        :accept-anchor t)
+             (relative-time :day-of-week 5)))
+  ⇒ #Z(@@2007-12-14 @@2008-01-11 @@2008-02-08 …)
+@end lisp
+@end float
+
+To read this example briefly: Beginning with the first day of the
+current month, advance forward one month @emph{ad infinitum}.  For
+each new month, scan forward to the first Friday (accepting the first
+day if it is Friday, with @code{:accept-anchor}).  Then scan to the
+Friday after that.
+
+@float Example,fig:ex3
+@caption{Every 15 days, or the following Monday if that day is a weekend}
+@lisp
+(mapping ((time (scan-times @@2007-11-03 (duration :days 15))))
+  (if (falls-on-weekend-p time)
+      (next-time time (relative-time :day-of-week 1))
+      time))
+  ⇒ #Z(@@2007-11-19 @@2007-12-03 @@2007-12-18 …)
+@end lisp
+@end float
+
+The starting time for this example is set to @samp{3 Nov 2007}, so
+that the Monday-shifting could be demonstrated.  Note how the shift
+does not disrupt the regular 15-day cycle, it merely causes the
+paycheck to be delivered one day late in that instance.
+
+    Hopefully this gives an idea of the power and flexibility of the
+periods library, especially if used in combination with the
+@sc{series} library@footnote{See @url{http://series.sourceforge.net/}.
+This library is an optional dependency of @sc{periods}, if the feature
+@var{*periods-use-series*} is added to the @var{*features*} list
+before compilation.}, since times are naturally expressable as an
+unbounded series supporting lazy calculation.
+
+@node Installation, Fixed time, Introduction, Top
+@chapter Installation
+
+In order to install @sc{periods}, two or three dependency libraries
+must be installed.  First, the two required dependencies:
+
+@itemize
+@item local-time 0.9.2 or later
+@item cl-fad 0.6.0 or later (this is a dependency of local-time)
+@end itemize
+
+    If you also wish to use the @sc{series} library with @sc{periods},
+it must be installed as well, version 2.2.9 or later.  In this case,
+be sure to add @var{*periods-use-series*} to the @var{*features*}
+special variable before compiling.
+
+    The following is an example session using @acronym{SBCL} to
+demonstrate the installation of @sc{periods} with support for
+@sc{series} computations:
+
+@smallexample
+* (require 'asdf)
+* (push *periods-use-series* *features*)
+* (require 'asdf-install)
+* (asdf-install:install :local-time)
+* (asdf-install:install :series)
+* (asdf-install:install :periods)
+@end smallexample
+
+@strong{NOTE: At the time of this writing, @sc{periods} is not yet
+available using asdf-install.  Coming very soon.}
+
+@node Fixed time, Time durations, Installation, Top
+@chapter Fixed time
+
+The most basic element of time used by the @sc{periods} library is the
+@code{fixed-time} structure.  At present, this is just a type alias
+for @code{local-time} structures@footnote{See
+@url{http://common-lisp.net/project/local-time/}.}, so all of the
+operations possible on a @code{local-time} are applicable to a
+@code{fixed-time}.  In addition, @code{fixed-time}’s may be
+constructed by a convenience function of the same name, which allows
+for quickly creating time structures anchored in the current year.
+
+@include docstrings/fun-periods-fixed-time.texinfo                
+
+@menu
+* Helper functions::            
+@end menu
+
+@node Helper functions,  , Fixed time, Fixed time
+@section Helper functions
+
+There are a few helper functions for performing common operations on
+@code{fixed-time}’s:
+                
+@defun year-of fixed-time
+@defunx month-of fixed-time
+@defunx day-of fixed-time
+@defunx hour-of fixed-time
+@defunx minute-of fixed-time
+@defunx second-of fixed-time
+@defunx millisecond-of fixed-time
+Return the corresponding detail associated with a given
+@code{fixed-time}.  All results are of type @code{fixnum}.
+@end defun
+                
+@include docstrings/fun-periods-day-of-week.texinfo
+@include docstrings/fun-periods-falls-on-weekend-p.texinfo
+@include docstrings/fun-periods-current-year.texinfo
+@include docstrings/fun-periods-leapp.texinfo
+@include docstrings/fun-periods-days-in-month.texinfo
+@include docstrings/fun-periods-floor-time.texinfo
+@include docstrings/fun-periods-find-smallest-resolution.texinfo
+                
+@node Time durations, Relative time, Fixed time, Top
+@chapter Time durations
+                
+@node Relative time, Time ranges, Time durations, Top
+@chapter Relative time
+
+@node Time ranges, Time periods, Relative time, Top
+@chapter Time ranges
+                
+@node Time periods,  , Time ranges, Top
+@chapter Time periods
+
+@bye

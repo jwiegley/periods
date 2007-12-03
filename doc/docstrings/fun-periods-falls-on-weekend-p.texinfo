@@ -1,0 +1,5 @@
+@anchor{Function falls-on-weekend-p}
+@deffn {Function} falls-on-weekend-p fixed-time
+@findex falls-on-weekend-p
+Return @code{t} if the given @code{fixed-time} occurs on a Saturday or Sunday.
+@end deffn

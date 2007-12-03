@@ -1,0 +1,5 @@
+@anchor{Function days-in-month}
+@deffn {Function} days-in-month month &optional year
+@findex days-in-month
+Returns the number of days in the given month of the specified year.
+@end deffn
