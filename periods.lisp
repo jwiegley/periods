@@ -139,8 +139,8 @@
   "Reduce a fixed time to be no finer than RESOLUTION.
 
   For example, if the date is 2007-04-20, and the resolution is :month, the
-  date is floored to 2007-04-01.  Anything smaller than the resolution is
-  reduced to zero (or 1, if it is a day or month being reduced)."
+date is floored to 2007-04-01.  Anything smaller than the resolution is
+reduced to zero (or 1, if it is a day or month being reduced)."
   (declare (type local-time fixed-time))
   (multiple-value-bind
 	(nsec ss mm hh day month year)
@@ -320,11 +320,11 @@ The result is a FIXNUM with 0 representing Sunday, through 6 on Saturday."
   "Create a DURATION object.
 
   One thing to note about duration: there is no way to determine the total
-  length of a duration in terms of any specific time quantity, without first
-  binding that duration to a fixed point in time (after all, how many days are
-  in a month if you don't know which month it is?)  Therefore, those looking
-  for a function like \"duration-seconds\" are really wanting to work with
-  ranges, not just durations."
+length of a duration in terms of any specific time quantity, without first
+binding that duration to a fixed point in time (after all, how many days are
+in a month if you don't know which month it is?)  Therefore, those looking for
+a function like \"duration-seconds\" are really wanting to work with ranges,
+not just durations."
   (apply #'make-duration args))
 
 (defmacro with-skippers (&body body)
@@ -490,15 +490,17 @@ The result is a FIXNUM with 0 representing Sunday, through 6 on Saturday."
 (defun add-time (fixed-time duration &key (reverse nil))
   "Given a FIXED-TIME, add the supplied DURATION.
 
-  Example (reader notation requires calling `LOCAL-TIME:ENABLE-READ-MACROS'):
+  Example (reader notation requires calling LOCAL-TIME:ENABLE-READ-MACROS):
 
-    (add-time @2007-05-20T12:10:10.000 (duration :hours 50))
-      => @2007-05-22T14:10:10.000
+  (add-time @2007-05-20T12:10:10.000 (duration :hours 50))
+    ⇒ @2007-05-22T14:10:10.000
 
-  NOTE: This function always adds the largest increments first, so if the
-  duration is (duration :years 1 :days 20), and the current day is
-  @2003-01-09, the result will be @2004-02-29 -- not @2004-03-01, as it would
-  be, if days were added before years."
+  NOTE: This function always adds the largest increments first, so:
+
+  (add-time @2003-01-09 (duration :years 1 :days 20)) ⇒ @2004-02-29
+
+If days has been added before years, the result would have been
+\"@2004-03-01\"."
   (declare (type fixed-time fixed-time))
   (declare (type duration duration))
   (declare (type boolean reverse))
@@ -643,19 +645,19 @@ The result is a FIXNUM with 0 representing Sunday, through 6 on Saturday."
   "Compute the duration existing between fixed-times LEFT and RIGHT.
 
   The order of left or right is ignored; the returned DURATION, if added to
-  the earlier value, will result in the later.
+the earlier value, will result in the later.
 
   A complexity of this process which might surprise some is that larger
-  quantities are added by `ADD-TIME' before smaller quantities.  For example,
-  what is the difference between 2003-02-10 and 2004-03-01?  If you add years
-  before days, the difference is 1 year and 20 days.  If you were to add days
-  before years, however, the difference would be 1 year and 21 days.  The
-  question, do you advance to 2004 and then calculate between 2-10 and 3-01,
-  or do you move from 2-10 to 3-01, and then increment the year?  The PERIODS
-  library chooses to add years before days, since this follows human reckoning
-  a bit closer (i.e., a person would likely flip to the 2004 calendar and then
-  start counting off days, rather than the other way around).  This difference
-  in reckoning can be tricky, however, so bear this in mind.a"
+quantities are added by ADD-TIME before smaller quantities.  For example, what
+is the difference between 2003-02-10 and 2004-03-01?  If you add years before
+days, the difference is 1 year and 20 days.  If you were to add days before
+years, however, the difference would be 1 year and 21 days.  The question, do
+you advance to 2004 and then calculate between 2-10 and 3-01, or do you move
+from 2-10 to 3-01, and then increment the year?  This library chooses to add
+years before days, since this follows human reckoning a bit closer (i.e., a
+person would likely flip to the 2004 calendar and then start counting off
+days, rather than the other way around).  This difference in reckoning can be
+tricky, however, so bear this in mind."
   (if (local-time< left right)
       (rotatef left right))
   (let ((nsec (- (nsec-of left) (nsec-of right)))
@@ -744,19 +746,19 @@ The result is a FIXNUM with 0 representing Sunday, through 6 on Saturday."
 
   Example:
 
-    (subseries (scan-times @2007-11-01 (duration :months 1)) 0 10)
+  (subseries (scan-times @2007-11-01 (duration :months 1)) 0 10)
 
   `UNTIL-IF' can be used to bound the end of the range by a date:
 
-    (collect (until-if #'(lambda (time)
-                           (local-time:local-time>= time @2009-01-01))
-                       (scan-times @2007-11-01 (duration :months 1))))"
+  (collect (until-if #'(lambda (time)
+                          (local-time:local-time>= time @2009-01-01))
+                     (scan-times @2007-11-01 (duration :months 1))))"
   `(map-fn 'fixed-time (time-generator ,start ,duration :reverse ,reverse)))
 
 (defmacro loop-times (forms start duration end
 		      &key (reverse nil) (inclusive-p nil))
   "Map over a set of times separated by DURATION, calling CALLABLE with the
-  start of each."
+start of each."
   (let ((generator-sym (gensym))
 	(start-sym (gensym))
 	(end-sym (gensym)))
@@ -780,7 +782,7 @@ The result is a FIXNUM with 0 representing Sunday, through 6 on Saturday."
 (defmacro map-times (callable start duration end
 		     &key (reverse nil) (inclusive-p nil))
   "Map over a set of times separated by DURATION, calling CALLABLE with the
-  start of each."
+start of each."
   `(loop-times (do (funcall ,callable value))
       ,start ,duration ,end :reverse ,reverse
       :inclusive-p ,inclusive-p))
@@ -794,10 +796,10 @@ The result is a FIXNUM with 0 representing Sunday, through 6 on Saturday."
 
 (defmacro do-times ((var start duration end &optional (result nil))
 		    &body body)
-  "A 'do' style version of the functional `MAP-TIMES' macro.
+  "A 'do' style version of the functional MAP-TIMES macro.
 
-  The disadvantage to `DO-TIMES' is that there is no way to ask for a reversed
-  time sequence, or specify an inclusive endpoint."
+The disadvantage to DO-TIMES is that there is no way to ask for a reversed
+time sequence, or specify an inclusive endpoint."
   `(block nil
      (map-times #'(lambda (,var) ,@body) ,start ,duration ,end)
      ,result))
@@ -834,12 +836,12 @@ The result is a FIXNUM with 0 representing Sunday, through 6 on Saturday."
       (1+ value)))
 
 (defun enclosing-duration (relative-time)
-  "Return a DURATION which, if applied to a time, causes `NEXT-TIME' to move
-  to the next matching occurrence of that time pattern.
+  "Return a DURATION which, if applied to a time, causes NEXT-TIME to move to
+the next matching occurrence of that time pattern.
 
   For example, if you ask for ':day 18' on Nov 18, it will return the same
-  time back to you.  If you add enclosing duration for that relative time to
-  Nov 18 and then ask again, you'll get Dec 18."
+time back to you.  If you add enclosing duration for that relative time to Nov
+18 and then ask again, you'll get Dec 18."
   (cond
     ((relative-time-month relative-time)
      (duration :months 1))
@@ -919,44 +921,44 @@ The result is a FIXNUM with 0 representing Sunday, through 6 on Saturday."
   "Compute the first time after FIXED-TIME which matches RELATIVE-TIME.
 
   This function finds the first moment after FIXED-TIME which honors every
-  element in RELATIVE-TIME:
+element in RELATIVE-TIME:
 
-    (next-time @2007-05-20 (relative-time :month 3)) => @2008-03-20
+  (next-time @2007-05-20 (relative-time :month 3)) => @2008-03-20
 
   The relative time constructor arguments may also be symbolic:
 
-    (relative-time :month :this)
-    (relative-time :month :next)
-    (relative-time :month :prev)
+  (relative-time :month :this)
+  (relative-time :month :next)
+  (relative-time :month :prev)
 
-  To find the date two weeks after next February, a combination of `NEXT-TIME'
-  and `ADD-TIME' must be used, since \"next February\" is a relative time
-  concept, while \"two weeks\" is a duration concept:
+  To find the date two weeks after next February, a combination of NEXT-TIME
+and ADD-TIME must be used, since \"next February\" is a relative time concept,
+while \"two weeks\" is a duration concept:
 
-    (add-time (next-time @2007-05-20 (relative-time :month 2))
-              (duration :days 14))
+  (add-time (next-time @2007-05-20 (relative-time :month 2))
+            (duration :days 14))
 
-  NOTE: The keyword arguments to `RELATIVE-TIME' are always singular; those to
-  `DURATION' are always plural.
+NOTE: The keyword arguments to RELATIVE-TIME are always singular; those to
+DURATION are always plural.
 
   The following form resolves to the first sunday of the given year:
 
-    (next-time (previous-time @2007-05-20 
-                              (relative-time :month 1 :day 1))
-               (relative-time :week-day 0))
+  (next-time (previous-time @2007-05-20 
+                            (relative-time :month 1 :day 1))
+             (relative-time :week-day 0))
 
   This form finds the first Friday the 13th after today:
 
-    (next-time @2007-05-20 (relative-time :day 13 :day-of-week 5))
+  (next-time @2007-05-20 (relative-time :day 13 :day-of-week 5))
 
-  NOTE: When adding times, `NEXT-TIME' always seeks the next time that fully
-  honors your request.  If asked for Feb 29, the year of the resulting time
-  will fall in a leap year.  If asked for Thu, Apr 29, it returns the next
-  occurrence of Apr 29 which falls on a Friday.  Example:
+NOTE: When adding times, NEXT-TIME always seeks the next time that fully
+honors your request.  If asked for Feb 29, the year of the resulting time will
+fall in a leap year.  If asked for Thu, Apr 29, it returns the next occurrence
+of Apr 29 which falls on a Friday.  Example:
 
-    (next-time @2007-11-01
-               (relative-time :month 4 :day 29 :day-of-week 4))
-      => @2010-04-29T00:00:00.000"
+  (next-time @2007-11-01
+             (relative-time :month 4 :day 29 :day-of-week 4))
+    ⇒ @2010-04-29T00:00:00.000"
   (declare (type (or fixed-time null) anchor))
   (declare (type relative-time relative-time))
   (declare (type boolean reverse))
@@ -1156,7 +1158,7 @@ The result is a FIXNUM with 0 representing Sunday, through 6 on Saturday."
 (defmacro map-relative-times (callable anchor relative-time end
 			      &key (reverse nil) (inclusive-p nil))
   "Map over a set of times separated by DURATION, calling CALLABLE with the
-  start of each."
+start of each."
   `(loop-relative-times (do (funcall ,callable value))
       ,anchor ,relative-time ,end :reverse ,reverse
       :inclusive-p ,inclusive-p))
@@ -1170,10 +1172,10 @@ The result is a FIXNUM with 0 representing Sunday, through 6 on Saturday."
 
 (defmacro do-relative-times ((var anchor relative-time end
 				  &optional (result nil)) &body body)
-  "A 'do' style version of the functional `MAP-RELATIVE-TIMES' macro.
+  "A 'do' style version of the functional MAP-RELATIVE-TIMES macro.
 
-  The disadvantage to `DO-RELATIVE-TIMES' is that there is no way to ask for a
-  reversed time sequence, or specify an inclusive endpoint."
+  The disadvantage to DO-RELATIVE-TIMES is that there is no way to ask for a
+reversed time sequence, or specify an inclusive endpoint."
   `(block nil
      (map-relative-times #'(lambda (,var) ,@body)
 			 ,anchor ,relative-time ,end)
@@ -1793,9 +1795,8 @@ The result is a FIXNUM with 0 representing Sunday, through 6 on Saturday."
 #+periods-use-series
 (defun collate-by-time-period (item-series period &key (key #'identity))
   "Return two series, one is a series of lists grouped by ranges within the
-  period, and the other is a series of ranges, each element of which
-  corresponds to the group elements in the same position within the first
-  series."
+period, and the other is a series of ranges, each element of which corresponds
+to the group elements in the same position within the first series."
   (multiple-value-call #'map-fn
     '(values fixed-time fixed-time series)
     (let (next-series)
