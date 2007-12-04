@@ -56,7 +56,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 @node Top, Introduction, (dir), (dir)
 @top Overview
 
-@insertcopying
+Welcome to the @sc{periods} library.  The intention of this code is to
+provide a convenient set of utilities for manipulating times,
+distances between times, and both contiguous and discontiguous ranges
+of time.  By combining these facilities in various ways, almost any
+type of time expression is possible.
 @end ifnottex
 
 @menu
@@ -72,12 +76,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 @node Introduction, Installation, Top, Top
 @chapter Introduction
 
-Welcome to the @sc{periods} library.  The intention of this code is to
-provide a convenient set of utilities for manipulating times,
-distances between times, and both contiguous and discontiguous ranges
-of time.  By combining these facilities in various ways, almost any
-type of time expression is possible.
-
     Consider you are writing a calendaring application which must
 support the idea of recurring tasks.  Often, people using a calendar
 have very certain ideas of what type of recurrence they want---but it
@@ -91,18 +89,19 @@ without resorting to contortionist uses of
     By way of a brief introduction to the following sections, here is
 how each of the above time expressions would be calculated.  The first
 three occurrences of each are shown, starting from @samp{Sun, 18 Nov
-2007}:
+2007}.  This code generates an unbounded series occurring bi-weekly,
+or every 14 days:
 
-@float Example,fig:ex1
-@caption{Bi-weekly (every 14 days)}
 @lisp
 (scan-times @@2007-11-18 (duration :days 14))
-   ⇒ #Z(@@2007-12-02 @@2007-12-16 @@2007-12-30 …)
+   @result{} #Z(@@2007-12-02 @@2007-12-16 @@2007-12-30 @dots{})
 @end lisp
-@end float
 
-@float Example,fig:ex2
-@caption{Second Friday of every month}
+    This next example is a bit more involved, as it unifies the idea
+of @code{duration}-based time stepping (monthly) with
+@code{relative-time}.  The result is an unbounded sequence
+representing the second Friday of every month.
+
 @lisp
 (mapping ((time (scan-times (previous-time @@2007-11-18
                                            (relative-time :day 1))
@@ -110,31 +109,31 @@ three occurrences of each are shown, starting from @samp{Sun, 18 Nov
   (next-time (next-time time (relative-time :day-of-week 5)
                         :accept-anchor t)
              (relative-time :day-of-week 5)))
-  ⇒ #Z(@@2007-12-14 @@2008-01-11 @@2008-02-08 …)
+  @result{} #Z(@@2007-12-14 @@2008-01-11 @@2008-02-08 @dots{})
 @end lisp
-@end float
 
-To read this example briefly: Beginning with the first day of the
-current month, advance forward one month @emph{ad infinitum}.  For
-each new month, scan forward to the first Friday (accepting the first
-day if it is Friday, with @code{:accept-anchor}).  Then scan to the
-Friday after that.
+@noindent To read this example briefly: Beginning with the first day
+of the current month, advance forward one month @emph{ad infinitum}.
+For each new month, scan forward to the first Friday (accepting the
+first day if it is Friday, with @code{:accept-anchor}).  Then scan to
+the Friday after that.
 
-@float Example,fig:ex3
-@caption{Every 15 days, or the following Monday if that day is a weekend}
+    In the next example, we want to step through time every 15 days,
+but select the following Monday if the 15th day falls on a weekend.
+
 @lisp
 (mapping ((time (scan-times @@2007-11-03 (duration :days 15))))
   (if (falls-on-weekend-p time)
       (next-time time (relative-time :day-of-week 1))
       time))
-  ⇒ #Z(@@2007-11-19 @@2007-12-03 @@2007-12-18 …)
+  @result{} #Z(@@2007-11-19 @@2007-12-03 @@2007-12-18 @dots{})
 @end lisp
-@end float
 
-The starting time for this example is set to @samp{3 Nov 2007}, so
-that the Monday-shifting could be demonstrated.  Note how the shift
-does not disrupt the regular 15-day cycle, it merely causes the
-paycheck to be delivered one day late in that instance.
+@noindent The starting time for this example is set to
+@samp{3 Nov 2007}, so that Monday-shifting could be demonstrated.
+Note how the shift does not disrupt the regular 15-day cycle, it
+merely causes the paycheck to be delivered one day late in that
+instance.
 
     Hopefully this gives an idea of the power and flexibility of the
 periods library, especially if used in combination with the
@@ -164,6 +163,7 @@ special variable before compiling.
 demonstrate the installation of @sc{periods} with support for
 @sc{series} computations:
 
+@cartouche
 @smallexample
 * (require 'asdf)
 * (push *periods-use-series* *features*)
@@ -172,6 +172,7 @@ demonstrate the installation of @sc{periods} with support for
 * (asdf-install:install :series)
 * (asdf-install:install :periods)
 @end smallexample
+@end cartouche
 
 @strong{NOTE: At the time of this writing, @sc{periods} is not yet
 available using asdf-install.  Coming very soon.}

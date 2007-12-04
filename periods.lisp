@@ -205,9 +205,9 @@ finest specified element are reduced to 0 or 1, according to their position.
   For example, assuming the current time is \"@2007-11-17T23:02:00.000\",
 compare these outputs:
 
-  (fixed-time :month 4) ⇒ @2007-04-01T00:00:00.000
-  (fixed-time :day 10)  ⇒ @2007-11-10T00:00:00.000
-  (fixed-time :hour 15) ⇒ @2007-11-17T15:00:00.000
+  (fixed-time :month 4) => @2007-04-01T00:00:00.000
+  (fixed-time :day 10)  => @2007-11-10T00:00:00.000
+  (fixed-time :hour 15) => @2007-11-17T15:00:00.000
 
 This behavior makes it very easy to return a fixed time for \"april of this
 year\", etc.  If you wish to determine the date of the previous April, while
@@ -493,11 +493,11 @@ not just durations."
   Example (reader notation requires calling LOCAL-TIME:ENABLE-READ-MACROS):
 
   (add-time @2007-05-20T12:10:10.000 (duration :hours 50))
-    ⇒ @2007-05-22T14:10:10.000
+    => @2007-05-22T14:10:10.000
 
   NOTE: This function always adds the largest increments first, so:
 
-  (add-time @2003-01-09 (duration :years 1 :days 20)) ⇒ @2004-02-29
+  (add-time @2003-01-09 (duration :years 1 :days 20)) => @2004-02-29
 
 If days has been added before years, the result would have been
 \"@2004-03-01\"."
@@ -958,7 +958,7 @@ of Apr 29 which falls on a Friday.  Example:
 
   (next-time @2007-11-01
              (relative-time :month 4 :day 29 :day-of-week 4))
-    ⇒ @2010-04-29T00:00:00.000"
+    => @2010-04-29T00:00:00.000"
   (declare (type (or fixed-time null) anchor))
   (declare (type relative-time relative-time))
   (declare (type boolean reverse))

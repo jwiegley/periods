@@ -6,6 +6,3 @@ facilities in various ways, almost any type of time expression is possible.
 Please see the documentation in doc/ for information.
 
 John Wiegley <johnw@newartisans.com>
-
-p.s. Yes, the docstrings in the source code do contain Unicode characters.
-     Welcome to the 21st century.

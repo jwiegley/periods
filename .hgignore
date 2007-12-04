@@ -3,5 +3,16 @@
 \.x?fasl$
 \.x86f$
 doc/periods$
+doc/periods\.html$
 \.pdf$
 \.info$
+\.aux$
+\.cp$
+\.fn$
+\.fns$
+\.ky$
+\.log$
+\.pg$
+\.toc$
+\.tp$
+\.vr$
