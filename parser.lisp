@@ -354,12 +354,13 @@
     result))
 
 (defun p/time (in &optional (eof-error-p t))
-  (if-let ((time (p/qualified-time in eof-error-p)))
-    (if (eq (peek-token in nil) 'ago)
-	(progn
-	  (read-token in)
-	  (setf time (list :ago time)))
-	time)))
+  (let ((*token-stack* nil))
+    (if-let ((time (p/qualified-time in eof-error-p)))
+      (if (eq (peek-token in nil) 'ago)
+	  (progn
+	    (read-token in)
+	    (list :ago time))
+	  time))))
 
 ;;;_ * A recurring period of time
 

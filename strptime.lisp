@@ -2,19 +2,24 @@
 
 (in-package :periods)
 
+(defparameter *date-readtable* (copy-readtable nil))
+
+(defun ignore-character (stream char)
+  (declare (ignore stream))
+  (declare (ignore char))
+  (values))
+
+(set-macro-character #\/ #'ignore-character nil *date-readtable*)
+(set-macro-character #\. #'ignore-character nil *date-readtable*)
+(set-macro-character #\- #'ignore-character nil *date-readtable*)
+
 ;;;_  + FIXED-TIME parsing
 
+(declaim (inline read-integer))
 (defun read-integer (in &optional length skip-whitespace-p)
-  (parse-integer
-   (with-output-to-string (out)
-     (loop
-	for c = (peek-char nil in nil)
-	while (and c (or (digit-char-p c)
-			 (and skip-whitespace-p
-			      (char= c #\Space)))
-		   (or (null length)
-		       (>= (decf length) 0)))
-	do (write-char (read-char in) out)))))
+  (declare (ignore length skip-whitespace-p))
+  (let ((*readtable* *date-readtable*))
+    (read in)))
 
 (defun read-fixed-time (str in)
   (let (year (month 1) (day 1) (hour 0) (minute 0) (second 0))
