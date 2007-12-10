@@ -64,6 +64,8 @@
 	   collate-by-time-period
 	   sleep-until
 	   day-of-week
+	   time-difference
+	   duration-seconds
 	   falls-on-weekend-p
 	   current-year
 	   find-smallest-resolution
