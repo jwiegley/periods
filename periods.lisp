@@ -57,6 +57,8 @@
 	   time-periods
 	   time-period
 	   time-range
+	   time-range-begin
+	   time-range-end
 	   time-range-duration
 	   time-within-range-p
 	   map-over-time
