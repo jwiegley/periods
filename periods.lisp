@@ -71,6 +71,11 @@
 	   falls-on-weekend-p
 	   current-year
 	   find-smallest-resolution
+	   duration
+	   add-duration
+	   add-time
+	   subtract-duration
+	   subtract-time
 
 	   *input-time-format*
 	   *output-time-format*
