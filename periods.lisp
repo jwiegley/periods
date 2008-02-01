@@ -1540,7 +1540,8 @@ reversed time sequence, or specify an inclusive endpoint."
 	 ;; jww (2007-11-26): What if a duration was set?
 	 (setf (get-range-fixed-begin range)
 	       (previous-time (time-range-anchor range)
-			      (get-range-begin range))))
+			      (get-range-begin range)
+			      :accept-anchor t)))
 
 	(null
 	 (and (get-range-end range)
@@ -1566,7 +1567,8 @@ reversed time sequence, or specify an inclusive endpoint."
 	 ;; jww (2007-11-26): What if a duration was set?
 	 (setf (get-range-fixed-end range)
 	       (previous-time (time-range-anchor range)
-			      (get-range-end range))))
+			      (get-range-end range)
+			      :accept-anchor t)))
 
 	(null
 	 (and (get-range-begin range)
@@ -1649,15 +1651,15 @@ reversed time sequence, or specify an inclusive endpoint."
 		(null (time-range-end range)))
       (cond
 	((typep begin 'relative-time)
-	 (time-range :begin (previous-time anchor begin)
+	 (time-range :begin (previous-time anchor begin :accept-anchor t)
 		     :end (and (typep end 'relative-time)
-			       (previous-time anchor end))
+			       (previous-time anchor end :accept-anchor t))
 		     :duration (and (not (typep end 'relative-time))
 				    (time-range-duration range))))
 	((typep begin 'fixed-time)
 	 (time-range :begin (subtract-time anchor (time-range-duration range))
 		     :end (and (typep end 'relative-time)
-			       (previous-time anchor end))
+			       (previous-time anchor end :accept-anchor t))
 		     :duration (and (not (typep end 'relative-time))
 				    (time-range-duration range))))))))
 
