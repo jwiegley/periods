@@ -189,7 +189,7 @@
   (multiple-value-bind
 	(millisecond second minute hour day month year day-of-week
 		     daylight-p time-zone time-zone-abbrev)
-      (local-time:decode-local-time fixed-time)
+      (local-time:decode-timestamp fixed-time)
     (declare (ignore millisecond))
     (declare (ignorable day-of-week))
     (declare (ignorable daylight-p))
@@ -273,7 +273,7 @@
 		    (format out "~2,'0D" second))
 
 		   ((char= c #\s)	; seconds since Epoch, UTC (unix time)
-		    (format out "~D" (local-time:unix-time fixed-time)))
+		    (format out "~D" (local-time:unix-to-timestamp fixed-time)))
 
 		   ((char= c #\T)	; equiv: %H:%M:%S
 		    (princ (strftime fixed-time :format "%H:%M:%S") out))
