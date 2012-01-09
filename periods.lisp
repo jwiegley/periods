@@ -153,7 +153,7 @@ reduced to zero (or 1, if it is a day or month being reduced)."
   (declare (type local-time fixed-time))
   (multiple-value-bind
 	(nsec ss mm hh day month year)
-      (decode-local-time fixed-time)
+      (decode-timestamp fixed-time)
     (block nil
       (if (eq resolution :nanosecond) (return))
       (setf nsec (set-nanosecond-part nsec 0))
@@ -226,7 +226,7 @@ function PREVIOUS-TIME."
       (local-time:now)
       (multiple-value-bind
 	    (nsec ss mm hh day month year)
-	  (decode-local-time (local-time:now))
+	  (decode-timestamp (local-time:now))
 	(block nil
 	  (let ((this-nsec (getf args :nanosecond))
 		(this-usec (getf args :microsecond))
@@ -280,30 +280,30 @@ function PREVIOUS-TIME."
 		 nanosecond-of))
 
 (defun year-of (fixed-time)
-  (nth-value 6 (decode-local-time fixed-time)))
+  (nth-value 6 (decode-timestamp fixed-time)))
 (defun month-of (fixed-time)
-  (nth-value 5 (decode-local-time fixed-time)))
+  (nth-value 5 (decode-timestamp fixed-time)))
 (defun day-of (fixed-time)
-  (nth-value 4 (decode-local-time fixed-time)))
+  (nth-value 4 (decode-timestamp fixed-time)))
 (defun hour-of (fixed-time)
-  (nth-value 3 (decode-local-time fixed-time)))
+  (nth-value 3 (decode-timestamp fixed-time)))
 (defun minute-of (fixed-time)
-  (nth-value 2 (decode-local-time fixed-time)))
+  (nth-value 2 (decode-timestamp fixed-time)))
 (defun second-of (fixed-time)
-  (nth-value 1 (decode-local-time fixed-time)))
+  (nth-value 1 (decode-timestamp fixed-time)))
 (defun millisecond-of (fixed-time)
-  (millisecond-part (nth-value 0 (decode-local-time fixed-time))))
+  (millisecond-part (nth-value 0 (decode-timestamp fixed-time))))
 (defun microsecond-of (fixed-time)
-  (microsecond-part (nth-value 0 (decode-local-time fixed-time))))
+  (microsecond-part (nth-value 0 (decode-timestamp fixed-time))))
 (defun nanosecond-of (fixed-time)
-  (nanosecond-part (nth-value 0 (decode-local-time fixed-time))))
+  (nanosecond-part (nth-value 0 (decode-timestamp fixed-time))))
 
 (declaim (inline day-of-week))
 (defun day-of-week (fixed-time)
   "Return the day of the week associated with a given FIXED-TIME.
 The result is a FIXNUM with 0 representing Sunday, through 6 on Saturday."
   (declare (type fixed-time fixed-time))
-  (nth-value 7 (decode-local-time fixed-time)))
+  (nth-value 7 (decode-timestamp fixed-time)))
 
 (declaim (inline falls-on-weekend-p))
 (defun falls-on-weekend-p (fixed-time)
@@ -520,7 +520,7 @@ If days has been added before years, the result would have been
 	   (zerop (duration-minutes duration)))
       (multiple-value-bind (quotient remainder)
 	  (floor (funcall (if reverse #'- #'+)
-			  (+ (* (unix-time fixed-time) 1000000000)
+			  (+ (* (unix-to-timestamp fixed-time) 1000000000)
 			     (nsec-of fixed-time))
 			  (+ (* (duration-seconds duration) 1000000000)
 			     (* (duration-milliseconds duration) 1000000)
@@ -530,7 +530,7 @@ If days has been added before years, the result would have been
 	(local-time :unix quotient :nsec remainder))
       (multiple-value-bind
 	    (nsec ss mm hh day month year)
-	  (decode-local-time fixed-time)
+	  (decode-timestamp fixed-time)
 	(let ((identity (if reverse -1 1)))
 	  (with-skippers
 	    (if (duration-years duration)
@@ -760,7 +760,7 @@ tricky, however, so bear this in mind."
   `UNTIL-IF' can be used to bound the end of the range by a date:
 
   (collect (until-if #'(lambda (time)
-                          (local-time:local-time>= time @2009-01-01))
+                          (local-time:timestamp>= time @2009-01-01))
                      (scan-times @2007-11-01 (duration :months 1))))"
   `(map-fn 'fixed-time (time-generator ,start ,duration :reverse ,reverse)))
 
@@ -774,18 +774,18 @@ start of each."
     `(let ((,start-sym ,start)
 	   (,end-sym ,end))
        (assert (,(if reverse
-		     'local-time>
-		     'local-time<) ,start-sym ,end-sym))
+		     'timestamp>
+		     'timestamp<) ,start-sym ,end-sym))
        (loop
 	  with ,generator-sym = (time-generator ,start-sym ,duration)
 	  for value = (funcall ,generator-sym)
 	  while ,(if reverse
 		     (if inclusive-p
-			 `(local-time>= value ,end-sym)
-			 `(local-time> value ,end-sym))
+			 `(timestamp>= value ,end-sym)
+			 `(timestamp> value ,end-sym))
 		     (if inclusive-p
-			 `(local-time<= value ,end-sym)
-			 `(local-time< value ,end-sym)))
+			 `(timestamp<= value ,end-sym)
+			 `(timestamp< value ,end-sym)))
 	  ,@forms))))
 
 (defmacro map-times (callable start duration end
@@ -908,7 +908,7 @@ time back to you.  If you add enclosing duration for that relative time to Nov
 (defun matches-relative-time-p (fixed-time relative-time)
   "Return T if the given FIXED-TIME honors the details in RELATIVE-TIME."
   (apply #'details-match-relative-time-p
-	 relative-time (multiple-value-list (decode-local-time fixed-time))))
+	 relative-time (multiple-value-list (decode-timestamp fixed-time))))
 
 ;; jww (2007-11-18): The following bug occurs:
 ;;   (next-time @2008-04-01 (relative-time :month 2 :day 29))
@@ -975,7 +975,7 @@ of Apr 29 which falls on a Friday.  Example:
   (let ((moment (or anchor (local-time:now))))
     (multiple-value-bind
 	  (nsec ss mm hh day month year day-of-week)
-	(decode-local-time moment)
+	(decode-timestamp moment)
 
       ;; If the moment we just decoded already matches the relative-time,
       ;; either return it immediately (if :ACCEPT-ANCHOR is T), or else
@@ -1006,7 +1006,7 @@ of Apr 29 which falls on a Friday.  Example:
 		       (now-nsec now-ss now-mm now-hh
 				 now-day now-month
 				 now-year now-day-of-week)
-		     (decode-local-time (local-time:now)))
+		     (decode-timestamp (local-time:now)))
 		   (setf now-nsec nsec
 			 now-ss ss
 			 now-mm mm
@@ -1109,7 +1109,7 @@ of Apr 29 which falls on a Friday.  Example:
 		  (loop
 		     for new-time =
 		       (encode-local-time nsec ss mm hh day month year)
-		     for new-dow = (nth-value 7 (decode-local-time new-time))
+		     for new-dow = (nth-value 7 (decode-timestamp new-time))
 		     while (/= new-dow (relative-time-day-of-week
 					relative-time))
 		     do (skip-day identity))))))
@@ -1157,11 +1157,11 @@ of Apr 29 which falls on a Friday.  Example:
 	  for value = (funcall ,generator-sym)
 	  while ,(if reverse
 		     (if inclusive-p
-			 `(local-time>= value ,end-sym)
-			 `(local-time> value ,end-sym))
+			 `(timestamp>= value ,end-sym)
+			 `(timestamp> value ,end-sym))
 		     (if inclusive-p
-			 `(local-time<= value ,end-sym)
-			 `(local-time< value ,end-sym)))
+			 `(timestamp<= value ,end-sym)
+			 `(timestamp< value ,end-sym)))
 	  ,@forms))))
 
 (defmacro map-relative-times (callable anchor relative-time end
@@ -1610,18 +1610,18 @@ reversed time sequence, or specify an inclusive endpoint."
 	(end (time-range-end range)))
     (and (or (null begin)
 	     (if (get-range-begin-inclusive-p range)
-		 (local-time>= fixed-time begin)
-		 (local-time> fixed-time begin)))
+		 (timestamp>= fixed-time begin)
+		 (timestamp> fixed-time begin)))
 	 (or (null end)
 	     (if (get-range-end-inclusive-p range)
-		 (local-time<= fixed-time end)
-		 (local-time< fixed-time end))))))
+		 (timestamp<= fixed-time end)
+		 (timestamp< fixed-time end))))))
 
 (defun time-within-begin-end-p (fixed-time begin end)
   (and (or (null begin)
-	   (local-time>= fixed-time begin))
+	   (timestamp>= fixed-time begin))
        (or (null end)
-	   (local-time< fixed-time end))))
+	   (timestamp< fixed-time end))))
 
 (defun time-range-next (range)
   (let ((begin (get-range-begin range))	; uncooked
@@ -1756,8 +1756,8 @@ reversed time sequence, or specify an inclusive endpoint."
 				 this-end)))
 	    (when (and end next-begin)
 	      (if (if end-inclusive-p
-		      (local-time> next-begin end)
-		      (local-time>= next-begin end))
+		      (timestamp> next-begin end)
+		      (timestamp>= next-begin end))
 		  (setf next-begin nil)))
 	    (multiple-value-prog1
 		(values begin this-end next-begin)
@@ -1827,7 +1827,7 @@ to the group elements in the same position within the first series."
 
 (defun sleep-until (fixed-time)
   (let ((now (local-time:now)))
-    (when (local-time:local-time> fixed-time now)
+    (when (local-time:timestamp> fixed-time now)
       (let ((duration (time-difference fixed-time now)))
 	(sleep (/ (+ (* (duration-seconds duration) 1000000000)
 		     (* (duration-milliseconds duration) 1000000)
