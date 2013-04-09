@@ -172,7 +172,7 @@ reduced to zero (or 1, if it is a day or month being reduced)."
       (setf day 1)
       (if (eq resolution :month) (return))
       (setf month 1))
-    (encode-local-time nsec ss mm hh day month year)))
+    (encode-timestamp nsec ss mm hh day month year)))
 
 (defun find-smallest-resolution (step-by)
   "Examine the property list STEP-BY and return the smallest unit of time
@@ -267,7 +267,7 @@ function PREVIOUS-TIME."
 		(if truncate (setf month 1)))
 	    (if this-year
 		(setf year this-year))))
-	(encode-local-time nsec ss mm hh day month year))))
+	(encode-timestamp nsec ss mm hh day month year))))
 
 (declaim (inline year-of
 		 month-of
@@ -551,7 +551,7 @@ If days has been added before years, the result would have been
 		(skip-microsecond (* identity (duration-microseconds duration))))
 	    (if (duration-nanoseconds duration)
 		(skip-nanosecond (* identity (duration-nanoseconds duration))))))
-	(encode-local-time nsec ss mm hh day month year))))
+	(encode-timestamp nsec ss mm hh day month year))))
 
 (declaim (inline subtract-time))
 (defun subtract-time (fixed-time duration)
@@ -1108,13 +1108,13 @@ of Apr 29 which falls on a Friday.  Example:
 	      (if (relative-time-day-of-week relative-time)
 		  (loop
 		     for new-time =
-		       (encode-local-time nsec ss mm hh day month year)
+		       (encode-timestamp nsec ss mm hh day month year)
 		     for new-dow = (nth-value 7 (decode-timestamp new-time))
 		     while (/= new-dow (relative-time-day-of-week
 					relative-time))
 		     do (skip-day identity))))))
 
-	(encode-local-time nsec ss mm hh day month year)))))
+	(encode-timestamp nsec ss mm hh day month year)))))
 
 (declaim (inline previous-time))
 (defun previous-time (anchor relative-time &key (accept-anchor nil))
