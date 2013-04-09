@@ -181,7 +181,7 @@
   (let ((decoded (strptime-decoded string :format format)))
     (unless (nth 6 decoded)
       (setf (nth 6 decoded) (or default-year (current-year))))
-    (apply #'encode-local-time decoded)))
+    (apply #'encode-timestamp decoded)))
 
 (defun strftime (fixed-time &key (format *output-time-format*))
   (declare (type fixed-time fixed-time))
