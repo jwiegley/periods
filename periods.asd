@@ -36,7 +36,7 @@
 
 (in-package :periods-asd)
 
-(defvar *periods-version* "0.0.1"
+(defvar *periods-version* "0.0.2"
   "A string denoting the current version of PERIODS.  Used
 for diagnostic output.")
 
@@ -45,7 +45,12 @@ for diagnostic output.")
 (asdf:defsystem :periods
   :serial t
   :version #.*periods-version*
-  :depends-on (:local-time #+:periods-use-series :series)
+  :description "The intention of this code is to provide a convenient
+set of utilities for manipulating times, distances between times, and
+both contiguous and discontiguous ranges of time.  By combining these
+facilities in various ways, almost any type of time expression is
+possible."
+  :depends-on (:local-time :series)
   :components ((:file "periods")
 	       (:file "strptime")
 	       (:file "parser")))
