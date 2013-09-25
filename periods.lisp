@@ -44,7 +44,7 @@
 (declaim (optimize (debug 3) (safety 3) (speed 1) (space 0)))
 
 (defpackage :periods
-  (:use :common-lisp :local-time #+:periods-use-series :series)
+  (:use :common-lisp :local-time :series)
   (:nicknames :time-periods)
   (:export leapp
 	   days-in-month
@@ -89,7 +89,7 @@
 
 (in-package :periods)
 
-#+:periods-use-series (series::install)
+(series::install)
 
 ;;;_ * Global variables
 
@@ -749,7 +749,6 @@ tricky, however, so bear this in mind."
       (setf next (add-time (or next start) duration
 			   :reverse reverse)))))
 
-#+periods-use-series
 (defmacro scan-times (start duration &key (reverse nil))
   "This macro represents continguous time durations as a SERIES.
 
@@ -1138,7 +1137,6 @@ of Apr 29 which falls on a Friday.  Example:
       (setf next (next-time (or next anchor) relative-time
 			    :reverse reverse)))))
 
-#+periods-use-series
 (defmacro scan-relative-times (anchor relative-time &key (reverse nil))
   `(scan-fn 'fixed-time (relative-time-generator ,anchor ,relative-time
 						 :reverse ,reverse)))
@@ -1790,7 +1788,6 @@ reversed time sequence, or specify an inclusive endpoint."
 	  ,@body) ,period)
      ,result))
 
-#+periods-use-series
 (defun scan-time-period (period)
   (multiple-value-call #'until-if
     #'null (map-fn '(values
@@ -1803,7 +1800,6 @@ reversed time sequence, or specify an inclusive endpoint."
 
 ;;;_  + SERIES functions
 
-#+periods-use-series
 (defun collate-by-time-period (item-series period &key (key #'identity))
   "Return two series, one is a series of lists grouped by ranges within the
 period, and the other is a series of ranges, each element of which corresponds
