@@ -138,16 +138,14 @@ instance.
     Hopefully this gives an idea of the power and flexibility of the
 periods library, especially if used in combination with the
 @sc{series} library@footnote{See @url{http://series.sourceforge.net/}.
-This library is an optional dependency of @sc{periods}, if the feature
-@var{*periods-use-series*} is added to the @var{*features*} list
-before compilation.}, since times are naturally expressable as an
-unbounded series supporting lazy calculation.
+To use the series-enabled functions, load the @sc{period-series} ASDF system.},
+since times are naturally expressable as an unbounded series supporting
+lazy calculation.
 
 @node Installation, Fixed time, Introduction, Top
 @chapter Installation
 
-In order to install @sc{periods}, two or three dependency libraries
-must be installed.  First, the two required dependencies:
+The @sc{periods} library depends on two required dependencies:
 
 @itemize
 @item local-time 0.9.2 or later
@@ -155,27 +153,26 @@ must be installed.  First, the two required dependencies:
 @end itemize
 
     If you also wish to use the @sc{series} library with @sc{periods},
-it must be installed as well, version 2.2.9 or later.  In this case,
-be sure to add @var{*periods-use-series*} to the @var{*features*}
-special variable before compiling.
+it must be installed as well, version 2.2.9 or later.
 
-    The following is an example session using @acronym{SBCL} to
-demonstrate the installation of @sc{periods} with support for
-@sc{series} computations:
+    The recommended way to install the library is to use Quicklisp,
+which installs the dependencies automatically.
+
+    Here is how to load the basic @sc{periods} library:
 
 @cartouche
 @smallexample
-* (require 'asdf)
-* (push *periods-use-series* *features*)
-* (require 'asdf-install)
-* (asdf-install:install :local-time)
-* (asdf-install:install :series)
-* (asdf-install:install :periods)
+* (ql:quickload :periods)
 @end smallexample
 @end cartouche
 
-@strong{NOTE: At the time of this writing, @sc{periods} is not yet
-available using asdf-install.  Coming very soon.}
+    Loading the series-enabled @sc{periods} functions:
+
+@cartouche
+@smallexample
+* (ql:quickload :period-series)
+@end smallexample
+@end cartouche
 
 @node Fixed time, Time durations, Installation, Top
 @chapter Fixed time
