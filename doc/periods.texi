@@ -138,26 +138,21 @@ instance.
     Hopefully this gives an idea of the power and flexibility of the
 periods library, especially if used in combination with the
 @sc{series} library@footnote{See @url{http://series.sourceforge.net/}.
-This library is an optional dependency of @sc{periods}, if the feature
-@var{*periods-use-series*} is added to the @var{*features*} list
-before compilation.}, since times are naturally expressable as an
-unbounded series supporting lazy calculation.
+This library is in the dependencies list of @sc{periods}, since times
+are naturally expressable as an unbounded series supporting lazy
+calculation.
 
 @node Installation, Fixed time, Introduction, Top
 @chapter Installation
 
-In order to install @sc{periods}, two or three dependency libraries
-must be installed.  First, the two required dependencies:
+In order to install @sc{periods}, three dependency libraries
+must be installed:
 
 @itemize
 @item local-time 0.9.2 or later
 @item cl-fad 0.6.0 or later (this is a dependency of local-time)
+@item series 2.2.9 or later
 @end itemize
-
-    If you also wish to use the @sc{series} library with @sc{periods},
-it must be installed as well, version 2.2.9 or later.  In this case,
-be sure to add @var{*periods-use-series*} to the @var{*features*}
-special variable before compiling.
 
     The following is an example session using @acronym{SBCL} to
 demonstrate the installation of @sc{periods} with support for
@@ -166,7 +161,6 @@ demonstrate the installation of @sc{periods} with support for
 @cartouche
 @smallexample
 * (require 'asdf)
-* (push *periods-use-series* *features*)
 * (require 'asdf-install)
 * (asdf-install:install :local-time)
 * (asdf-install:install :series)

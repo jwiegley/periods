@@ -1,0 +1,6 @@
+Welcome to the PERIODS library.  The intention of this code is to provide a
+convenient set of utilities for manipulating times, distances between times,
+and both contiguous and discontiguous ranges of time.  By combining these
+facilities in various ways, almost any type of time expression is possible.
+
+Please see the documentation in doc/ for information.
