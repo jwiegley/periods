@@ -667,7 +667,7 @@ years before days, since this follows human reckoning a bit closer (i.e., a
 person would likely flip to the 2004 calendar and then start counting off
 days, rather than the other way around).  This difference in reckoning can be
 tricky, however, so bear this in mind."
-  (if (local-time< left right)
+  (if (timestamp< left right)
       (rotatef left right))
   (let ((nsec (- (nsec-of left) (nsec-of right)))
 	(sec (- (universal-time left) (universal-time right))))
