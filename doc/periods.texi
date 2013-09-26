@@ -137,9 +137,8 @@ instance.
 
     Hopefully this gives an idea of the power and flexibility of the
 periods library, especially if used in combination with the
-@sc{series} library@footnote{See @url{http://series.sourceforge.net/}.
-This library is in the dependencies list of @sc{periods}, since times
-are naturally expressable as an unbounded series supporting lazy
+@sc{series} library@footnote{See @url{http://series.sourceforge.net/},
+since times are naturally expressable as an unbounded series supporting lazy
 calculation.
 
 @node Installation, Fixed time, Introduction, Top
