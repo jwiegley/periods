@@ -47,7 +47,6 @@
   (:use :common-lisp :local-time :series)
   (:nicknames :time-periods)
   (:export leapp
-	   ;; days-in-month
 	   increment-time
 	   decrement-time
 	   floor-time
@@ -198,7 +197,7 @@ The result is :MINUTE."
 ;;;_ * FIXED-TIME
 
 (deftype fixed-time ()
-  'timestamp)
+  'local-time:timestamp)
 
 (defun fixed-time (&rest args)
   "Return a fixed point in time relative to the time of the call.  ARGS is a
@@ -670,7 +669,7 @@ tricky, however, so bear this in mind."
   (if (timestamp< left right)
       (rotatef left right))
   (let ((nsec (- (nsec-of left) (nsec-of right)))
-	(sec (- (local-time:timestamp-to-universal left) (local-time:timestamp-to-universal right))))
+	(sec (- (timestamp-to-universal left) (timestamp-to-universal right))))
     (if (minusp nsec)
 	(decf sec))
     (duration :seconds sec :nanoseconds nsec)))
