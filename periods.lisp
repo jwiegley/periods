@@ -84,7 +84,8 @@
 	   strptime
 	   strptime-decoded
 	   strftime)
-  (:shadow day-of))
+  (:shadow day-of
+	   days-in-month))
 
 (in-package :periods)
 
@@ -113,13 +114,13 @@
   "Return the current year as a FIXNUM."
   (nth-value 5 (get-decoded-time)))
 
-#|(defun days-in-month (month &optional year)
+(defun days-in-month (month &optional year)
   (let ((days (aref *days-in-months* (1- month)))
 	(the-year (or year (current-year))))
     (if (and (= month 2)
 	     (leapp the-year))
 	(incf days)
-	days)))|#
+	days)))
 
 (declaim (inline nanosecond-part microsecond-part millisecond-part))
 
@@ -1085,8 +1086,7 @@ of Apr 29 which falls on a Friday.  Example:
 					       (relative-time-year relative-time)))
 			    (<= (relative-time-day relative-time)
 				(max 29 (days-in-month
-					 (relative-time-month relative-time)
-					 (current-year)))))
+					 (relative-time-month relative-time)))))
 			(<= (relative-time-day relative-time) 31))
 		  (error "Invalid day specifier in relative-time: ~S"
 			 relative-time))
