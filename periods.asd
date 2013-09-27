@@ -32,15 +32,14 @@
 (in-package :cl-user)
 
 (defpackage :periods-asd
-  (:use :cl :asdf))
+  (:use :cl :asdf)
+  (:export :*periods-version*))
 
 (in-package :periods-asd)
 
 (defvar *periods-version* "0.0.2"
   "A string denoting the current version of PERIODS.  Used
 for diagnostic output.")
-
-(export '*periods-version*)
 
 (asdf:defsystem :periods
   :serial t
