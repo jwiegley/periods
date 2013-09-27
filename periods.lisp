@@ -47,7 +47,6 @@
   (:use :common-lisp :local-time :series)
   (:nicknames :time-periods)
   (:export leapp
-	   days-in-month
 	   increment-time
 	   decrement-time
 	   floor-time
@@ -85,7 +84,8 @@
 	   strptime
 	   strptime-decoded
 	   strftime)
-  (:shadow day-of))
+  (:shadow day-of
+           days-in-month))
 
 (in-package :periods)
 
@@ -150,7 +150,7 @@
   For example, if the date is 2007-04-20, and the resolution is :month, the
 date is floored to 2007-04-01.  Anything smaller than the resolution is
 reduced to zero (or 1, if it is a day or month being reduced)."
-  (declare (type local-time fixed-time))
+  (declare (type fixed-time fixed-time))
   (multiple-value-bind
 	(nsec ss mm hh day month year)
       (decode-timestamp fixed-time)
@@ -198,7 +198,7 @@ The result is :MINUTE."
 ;;;_ * FIXED-TIME
 
 (deftype fixed-time ()
-  'local-time)
+  'local-time:timestamp)
 
 (defun fixed-time (&rest args)
   "Return a fixed point in time relative to the time of the call.  ARGS is a
@@ -527,7 +527,7 @@ If days has been added before years, the result would have been
 			     (* (duration-microseconds duration) 1000)
 			     (duration-nanoseconds duration)))
 		 1000000000)
-	(local-time :unix quotient :nsec remainder))
+	(unix-to-timestamp quotient :nsec remainder))
       (multiple-value-bind
 	    (nsec ss mm hh day month year)
 	  (decode-timestamp fixed-time)
@@ -670,7 +670,7 @@ tricky, however, so bear this in mind."
   (if (timestamp< left right)
       (rotatef left right))
   (let ((nsec (- (nsec-of left) (nsec-of right)))
-	(sec (- (universal-time left) (universal-time right))))
+	(sec (- (timestamp-to-universal left) (timestamp-to-universal right))))
     (if (minusp nsec)
 	(decf sec))
     (duration :seconds sec :nanoseconds nsec)))
