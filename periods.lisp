@@ -60,6 +60,10 @@
 	   time-range-end
 	   time-range-duration
 	   time-within-range-p
+
+           with-timestamp-range
+           update-range
+
 	   map-over-time
 	   do-over-time
 	   collate-by-time-period
@@ -1795,6 +1799,30 @@ reversed time sequence, or specify an inclusive endpoint."
 		     (or fixed-time null)
 		     (or fixed-time null))
 		   (time-period-generator period))))
+
+(defmacro with-timestamp-range ((min-symbol max-symbol) &body body)
+  "Define a context where (1) MIN-SYMBOL and MAX-SYMBOL are locally
+bound variables with NIL default values and (2) UPDATE-RANGE is a
+lexically bound function with the following behaviour: UPDATE-RANGE
+takes a timestamp and updates the variables MIN-SYMBOL and MAX-SYMBOL
+so that they respectively hold the earliest and latest timestamp after
+successive invocations. For example, the following code builds a
+TIME-RANGE instance from a list of dated transactions.
+
+      (with-timestamp-range (earliest latest)
+        (dolist (tt transaction)
+          (update-range (transaction-date tt)))
+        (time-range :begin earliest :end latest :end-inclusive-p t))
+"
+  `(let (,min-symbol ,max-symbol)
+     (flet ((update-range (date)
+              (when (or (null ,min-symbol)
+                        (local-time:timestamp< date ,min-symbol))
+                (setf ,min-symbol date))
+              (when (or (null ,max-symbol)
+                        (local-time:timestamp> date ,max-symbol))
+                (setf ,max-symbol date))))
+       ,@body)))
 
 ;;;_ * Library functions
 
