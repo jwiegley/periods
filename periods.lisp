@@ -520,7 +520,7 @@ If days has been added before years, the result would have been
 	   (zerop (duration-minutes duration)))
       (multiple-value-bind (quotient remainder)
 	  (floor (funcall (if reverse #'- #'+)
-			  (+ (* (unix-to-timestamp fixed-time) 1000000000)
+			  (+ (* (timestamp-to-unix fixed-time) 1000000000)
 			     (nsec-of fixed-time))
 			  (+ (* (duration-seconds duration) 1000000000)
 			     (* (duration-milliseconds duration) 1000000)
