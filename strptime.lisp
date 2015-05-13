@@ -273,7 +273,7 @@
 		    (format out "~2,'0D" second))
 
 		   ((char= c #\s)	; seconds since Epoch, UTC (unix time)
-		    (format out "~D" (local-time:unix-to-timestamp fixed-time)))
+		    (format out "~D" (local-time:timestamp-to-unix fixed-time)))
 
 		   ((char= c #\T)	; equiv: %H:%M:%S
 		    (princ (strftime fixed-time :format "%H:%M:%S") out))
