@@ -915,9 +915,6 @@ time back to you.  If you add enclosing duration for that relative time to Nov
 ;;   (next-time @2008-04-01 (relative-time :month 2 :day 29))
 ;;     => @2009-03-29T00:33:08.004
 
-;; jww (2007-11-18): There appears to be a bug in local-time itself:
-;;   (local-time:parse-timestring "2008-02-29T00:00:00.000")
-;;     => @2008-03-01T00:00:00.000
 
 ;; jww (2007-11-22): This function fails to compile under CMUCL, although it
 ;; does work under SBCL and LispWorks.  I get this:
