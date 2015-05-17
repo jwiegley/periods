@@ -44,12 +44,7 @@ for diagnostic output.")
 (asdf:defsystem :periods
   :serial t
   :version #.*periods-version*
-  :description "The intention of this code is to provide a convenient
-set of utilities for manipulating times, distances between times, and
-both contiguous and discontiguous ranges of time.  By combining these
-facilities in various ways, almost any type of time expression is
-possible."
-  :depends-on (:local-time :series)
+  :depends-on (:local-time)
   :components ((:file "periods")
 	       (:file "strptime")
 	       (:file "parser")))
