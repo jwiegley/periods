@@ -93,8 +93,6 @@
 
 (in-package :periods)
 
-(series::install)
-
 ;;;_ * Global variables
 
 (defvar *input-time-format* "%Y/%m/%d%| %H:%M:%S")
