@@ -176,9 +176,9 @@
     (with-input-from-string (str string)
       (read-fixed-time str in))))
 
-(defun strptime (string &key (format *input-time-format*)
-		 (default-year nil))
-  (let ((decoded (strptime-decoded string :format format)))
+(defun strptime (string &key format default-year)
+  (let ((decoded (strptime-decoded string
+                                   :format (or format *input-time-format*))))
     (unless (nth 6 decoded)
       (setf (nth 6 decoded) (or default-year (current-year))))
     (apply #'encode-timestamp decoded)))
