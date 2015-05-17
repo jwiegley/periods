@@ -1,13 +1,13 @@
 (in-package :cl-user)
 
-(defpackage :period-series
+(defpackage :periods-series
      (:use :common-lisp :periods :series)
      (:export scan-times
               scan-relative-times
               scan-time-period
               collate-by-time-period))
 
-(in-package :period-series)
+(in-package :periods-series)
 
 (defmacro scan-times (start duration &key (reverse nil))
   "This macro represents continguous time durations as a SERIES.

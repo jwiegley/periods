@@ -29,8 +29,8 @@
 ;; (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 ;; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(asdf:defsystem :period-series
+(asdf:defsystem :periods-series
   :serial t
   :version "0.0.1"
   :depends-on (:periods :series)
-  :components ((:file "period-series")))
+  :components ((:file "periods-series")))
