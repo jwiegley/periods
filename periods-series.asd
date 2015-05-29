@@ -31,6 +31,10 @@
 
 (asdf:defsystem :periods-series
   :serial t
+  :description "Extension of PERIODS providing SERIES-compatible functions."
+  :author "Johh Wiegley <jwiegley@gmail.com>"
+  :maintainer "Christophe Junke <junke.christophe@gmail.com>"
+  :license "BSD-3"
   :version "0.0.1"
   :depends-on (:periods :series)
   :components ((:file "periods-series")))

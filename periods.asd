@@ -29,21 +29,15 @@
 ;; (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 ;; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(in-package :cl-user)
-
-(defpackage :periods-asd
-  (:use :cl :asdf)
-  (:export :*periods-version*))
-
-(in-package :periods-asd)
-
-(defvar *periods-version* "0.0.2"
-  "A string denoting the current version of PERIODS.  Used
-for diagnostic output.")
+(cl:in-package :asdf-user)
 
 (asdf:defsystem :periods
   :serial t
-  :version #.*periods-version*
+  :description "Utilities for manipulating time ranges and distances, based on LOCAL-TIME."
+  :author "Johh Wiegley <jwiegley@gmail.com>"
+  :maintainer "Christophe Junke <junke.christophe@gmail.com>"
+  :license "BSD-3"
+  :version "0.0.2"
   :depends-on (:local-time)
   :components ((:file "periods")
 	       (:file "strptime")
