@@ -1769,28 +1769,41 @@ reversed time sequence, or specify an inclusive endpoint."
 	  ,@body) ,period)
      ,result))
 
-(defmacro with-timestamp-range ((min-symbol max-symbol) &body body)
+(defmacro with-timestamp-range ((min-symbol max-symbol
+                                 &optional (update 'update-range)) &body body)
   "Define a context where (1) MIN-SYMBOL and MAX-SYMBOL are locally
-bound variables with NIL default values and (2) UPDATE-RANGE is a
-lexically bound function with the following behaviour: UPDATE-RANGE
-takes a timestamp and updates the variables MIN-SYMBOL and MAX-SYMBOL
-so that they respectively hold the earliest and latest timestamp after
-successive invocations. For example, the following code builds a
-TIME-RANGE instance from a list of dated transactions.
+bound variables with NIL default values and (2) UPDATE names a
+lexically bound function which takes a timestamp and updates the
+variables MIN-SYMBOL and MAX-SYMBOL so that they respectively hold the
+earliest and latest timestamp after successive invocations. That
+function finally returns its input value. For example, the following
+code builds a TIME-RANGE instance from a list of dated transactions.
 
       (with-timestamp-range (earliest latest)
         (dolist (tt transaction)
           (update-range (transaction-date tt)))
         (time-range :begin earliest :end latest :end-inclusive-p t))
+
+A custom name can be used to nest invocations:
+
+      (with-timestamp-range (earliest latest global-update-range)
+        (dolist (jj journals)
+          (with-timestamp-range (<< >>)
+            (dolist (tt (journal-xact jj))
+              (gloal-update-range
+                (update-range (transaction-date tt))))
+            (format t \"Journal earliest / latest: ~A / ~A~%\" << >>)))
+        (format t \"Global earliest / latest: ~A / ~A~%\" earliest latest))
 "
   `(let (,min-symbol ,max-symbol)
-     (flet ((update-range (date)
-              (when (or (null ,min-symbol)
-                        (local-time:timestamp< date ,min-symbol))
-                (setf ,min-symbol date))
-              (when (or (null ,max-symbol)
-                        (local-time:timestamp> date ,max-symbol))
-                (setf ,max-symbol date))))
+     (flet ((,update (date)
+              (prog1 date
+                (when (or (null ,min-symbol)
+                          (local-time:timestamp< date ,min-symbol))
+                  (setf ,min-symbol date))
+                (when (or (null ,max-symbol)
+                          (local-time:timestamp> date ,max-symbol))
+                  (setf ,max-symbol date)))))
        ,@body)))
 
 ;;;_ * Library functions
