@@ -12,6 +12,11 @@
 (defparameter *token-stack* nil)
 (defparameter *parser-readtable* (copy-readtable nil))
 
+(defun ignore-character (stream char)
+  (declare (ignore stream))
+  (declare (ignore char))
+  (values))
+
 (set-macro-character #\, #'ignore-character nil *parser-readtable*)
 (set-macro-character #\/ #'ignore-character nil *parser-readtable*)
 
