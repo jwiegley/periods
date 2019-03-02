@@ -2,24 +2,24 @@
 
 (in-package :periods)
 
-(defparameter *date-readtable* (copy-readtable nil))
-
-(defun ignore-character (stream char)
-  (declare (ignore stream))
-  (declare (ignore char))
-  (values))
-
-(set-macro-character #\/ #'ignore-character nil *date-readtable*)
-(set-macro-character #\. #'ignore-character nil *date-readtable*)
-(set-macro-character #\- #'ignore-character nil *date-readtable*)
-
 ;;;_  + FIXED-TIME parsing
 
 (declaim (inline read-integer))
 (defun read-integer (in &optional length skip-whitespace-p)
-  (declare (ignore length skip-whitespace-p))
-  (let ((*readtable* *date-readtable*))
-    (read in)))
+  (let ((n 0))
+    (loop for i from 0
+          for c = (peek-char nil in nil)
+          until (or (null c) (and length (>= i length)))
+          do (cond
+               ((and skip-whitespace-p (char= c #\space))
+                (read-char in nil))
+
+               ((char<= #\0 c #\9)
+                (setf n (+ (* n 10) (- (char-code (read-char in)) 48))))
+
+               (t
+                (return))))
+    n))
 
 (defun read-fixed-time (str in)
   (let (year (month 1) (day 1) (hour 0) (minute 0) (second 0))
@@ -79,7 +79,7 @@
 	       ((or (char= c #\H)
 		    (char= c #\I)) ; hour on the 12-hour clock
 		(setf hour (read-integer str 2))
-		(if (> hour 59)
+		(if (> hour 24)
 		    (error "Hours exceed maximum range: ~D" hour)))
 
 	       ((or (char= c #\k)	; hour, space prefix
