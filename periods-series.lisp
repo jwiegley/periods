@@ -2,6 +2,9 @@
 
 (defpackage :periods-series
      (:use :common-lisp :periods :series)
+     ;; This symbol is not external in :periods package
+     (:import-from #:periods
+                   #:time-generator)
      (:export scan-times
               scan-relative-times
               scan-time-period
