@@ -386,7 +386,7 @@ not just durations."
 		(if (minusp remainder)
 		    (progn
 		      (skip-day -1)
-		      (setf hh 59)
+		      (setf hh 23)
 		      (skip-hour (1+ remainder)))
 		    (incf hh skip)))
 	      (if (plusp skip)
