@@ -25,6 +25,10 @@ html: periods.texi
 	sed -i "s@<pre class=\"lisp\">@<pre><code class=\"lisp\">@g" index.html
 	sed -i "s@<head>@<head> <script type=\"text/javascript\" src=\"https://lisp-maintainers.github.io/periods/static/highlight-lisp.js\"></script> <link rel=\"stylesheet\" href=\"https://lisp-maintainers.github.io/periods/static/github.css\">@g" index.html
 
+# Works best on the gh-pages branch.
+html-local:
+	sed -i "s@https://lisp-maintainers.github.io/periods@@g" index.html
+
 pdf: periods.texi docstrings
 	texi2pdf periods.texi
 
