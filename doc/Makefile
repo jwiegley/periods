@@ -23,7 +23,7 @@ html: periods.texi
 	sed -i "s@</body>@</body>  <script> HighlightLisp.highlight_auto(); HighlightLisp.paren_match(); </script>@g" index.html
 	sed -i "s@</pre>@</code></pre>@g" index.html
 	sed -i "s@<pre class=\"lisp\">@<pre><code class=\"lisp\">@g" index.html
-	sed -i "s@<head>@<head> <script type=\"text/javascript\" src=\"/js/highlight-lisp.js\"></script> <link rel=\"stylesheet\" href=\"/js/github.css\">@g" index.html
+	sed -i "s@<head>@<head> <script type=\"text/javascript\" src=\"https://lisp-maintainers.github.io/periods/static/highlight-lisp.js\"></script> <link rel=\"stylesheet\" href=\"https://lisp-maintainers.github.io/periods/static/github.css\">@g" index.html
 
 pdf: periods.texi docstrings
 	texi2pdf periods.texi
