@@ -16,8 +16,14 @@ info: periods.info
 periods.info: periods.texi docstrings
 	makeinfo periods.texi
 
-html: periods.texi docstrings
-	makeinfo --html periods.texi
+# Nice sed: @ is a separator just like the usual / but helping us to not escape the real /
+# Using https://github.com/orthecreedence/highlight-lisp/
+html: periods.texi
+	makeinfo --html --no-split periods.texi -o index.html
+	sed -i "s@</body>@</body>  <script> HighlightLisp.highlight_auto(); HighlightLisp.paren_match(); </script>@g" index.html
+	sed -i "s@</pre>@</code></pre>@g" index.html
+	sed -i "s@<pre class=\"lisp\">@<pre><code class=\"lisp\">@g" index.html
+	sed -i "s@<head>@<head> <script type=\"text/javascript\" src=\"/js/highlight-lisp.js\"></script> <link rel=\"stylesheet\" href=\"/js/github.css\">@g" index.html
 
 pdf: periods.texi docstrings
 	texi2pdf periods.texi
