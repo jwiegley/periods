@@ -70,15 +70,44 @@
 	   sleep-until
 	   day-of-week
 	   time-difference
-	   duration-seconds
 	   falls-on-weekend-p
 	   current-year
 	   find-smallest-resolution
+
+           ;; duration
 	   duration
+	   duration-years
+	   duration-months
+	   duration-days
+	   duration-hours
+	   duration-minutes
+	   duration-seconds
+	   duration-microseconds
+	   duration-milliseconds
+	   duration-nanoseconds
 	   add-duration
 	   add-time
 	   subtract-duration
 	   subtract-time
+           add-years
+           subtract-years
+           add-months
+           subtract-months
+           add-days
+           subtract-days
+           add-hours
+           subtract-hours
+           add-minutes
+           subtract-minutes
+           add-seconds
+           subtract-seconds
+           add-milliseconds
+           subtract-milliseconds
+           add-microseconds
+           subtract-microseconds
+           add-nanoseconds
+           subtract-nanoseconds
+           multiply-duration
 
 	   *input-time-format*
 	   *output-time-format*
@@ -87,7 +116,107 @@
 	   read-fixed-time
 	   strptime
 	   strptime-decoded
-	   strftime)
+	   strftime
+
+           do-times
+           list-times
+           map-times
+           loop-times
+           next-time
+           previous-time
+           next-monday
+           next-tuesday
+           next-wednesday
+           next-thursday
+           next-friday
+           next-saturday
+           next-sunday
+           previous-monday
+           previous-tuesday
+           previous-wednesday
+           previous-thursday
+           previous-friday
+           previous-saturday
+           previous-sunday
+           year-begin
+           month-begin
+           day-begin
+           hour-begin
+           minute-begin
+           second-begin
+           millisecond-begin
+           microsecond-begin
+           year-end
+           month-end
+           day-end
+           hour-end
+           minute-end
+           second-end
+           millisecond-end
+           microsecond-end
+           this-year
+           this-month
+           this-sunday-week
+           this-monday-week
+           this-day
+           this-hour
+           this-minute
+           this-second
+           this-millisecond
+           this-microsecond
+           next-year
+           next-month
+           next-sunday-week
+           next-monday-week
+           next-day
+           next-hour
+           next-minute
+           next-second
+           next-millisecond
+           next-microsecond
+           previous-year
+           previous-month
+           previous-sunday-week
+           previous-monday-week
+           previous-day
+           previous-hour
+           previous-minute
+           previous-second
+           previous-millisecond
+           previous-nanosecond
+           time-within-begin-end-p
+           this-year-range
+           this-month-range
+           this-sunday-week-range
+           this-monday-week-range
+           this-day-range
+           this-hour-range
+           this-minute-range
+           this-second-range
+           year-range
+           month-range
+           sunday-week-range
+           monday-week-range
+           day-range
+           hour-range
+           minute-range
+           second-range
+
+           year-of
+           month-of
+           day-of
+           hour-of
+           minute-of
+           second-of
+           millisecond-of
+           microsecond-of
+           nanosecond-of
+
+           ;; time-period:
+           ;; list-time-period
+           ;; loop-time-period
+           ;; map-time-period
+           )
   (:shadow day-of
 	   days-in-month))
 
@@ -785,7 +914,12 @@ start of each."
 
 (defmacro list-times (start duration end
 		      &key (reverse nil) (inclusive-p nil))
-  "Return a list of all times within the given range."
+  "Return a list of all times within the given range.
+
+Example:
+
+  (list-times (local-time:now) (duration :days 3) (next-sunday-week))
+  ;; => (@2023-11-16T18:16:05.836900+01:00 @2023-11-19T18:16:05.836900+01:00)"
   `(loop-times (collect value)
       ,start ,duration ,end :reverse ,reverse
       :inclusive-p ,inclusive-p))
@@ -795,7 +929,24 @@ start of each."
   "A 'do' style version of the functional MAP-TIMES macro.
 
 The disadvantage to DO-TIMES is that there is no way to ask for a reversed
-time sequence, or specify an inclusive endpoint."
+time sequence, or specify an inclusive endpoint.
+
+Return NIL.
+
+Example:
+
+(do-times (time (today)
+              (duration :hours 1)
+              (next-day))
+  (print time))
+;; =>
+@2023-11-13T02:00:00.000000+01:00
+@2023-11-13T03:00:00.000000+01:00
+@2023-11-13T04:00:00.000000+01:00
+[…]
+@2023-11-13T23:00:00.000000+01:00
+NIL
+"
   `(block nil
      (map-times #'(lambda (,var) ,@body) ,start ,duration ,end)
      ,result))
@@ -1506,6 +1657,23 @@ reversed time sequence, or specify an inclusive endpoint."
 
 (declaim (inline time-range))
 (defun time-range (&rest args)
+  "Create a TIME-RANGE.
+
+Params: the TIME-RANGE struct slots (:begin, :end, :duration…).
+
+Example:
+
+  (time-range :begin (next-day) :end (next-sunday-week))
+  ;; =>
+  #S(PERIODS:TIME-RANGE
+   :FIXED-BEGIN NIL
+   :BEGIN @2023-11-14T00:00:00.000000+01:00
+   :BEGIN-INCLUSIVE-P T
+   :FIXED-END NIL
+   :END @2023-11-19T17:51:58.625785+01:00
+   :END-INCLUSIVE-P NIL
+   :DURATION NIL
+   :ANCHOR NIL)"
   (apply #'make-time-range args))
 
 (defun time-range-begin (range)
@@ -1585,6 +1753,14 @@ reversed time sequence, or specify an inclusive endpoint."
       (setf (get-range-anchor range) (local-time:now))))
 
 (defun time-within-range-p (fixed-time range)
+  "Return T if FIXED-TIME is within this TIME-RANGE.
+
+Example:
+
+(time-within-range-p
+   (local-time:now)
+   (time-range :begin (previous-day)
+               :end (next-day)))"
   (let ((begin (time-range-begin range))
 	(end (time-range-end range)))
     (and (or (null begin)
@@ -1597,12 +1773,14 @@ reversed time sequence, or specify an inclusive endpoint."
 		 (timestamp< fixed-time end))))))
 
 (defun time-within-begin-end-p (fixed-time begin end)
+  "Similar to TIME-WITHIN-RANGE-P but with arguments begin and end."
   (and (or (null begin)
 	   (timestamp>= fixed-time begin))
        (or (null end)
 	   (timestamp< fixed-time end))))
 
 (defun time-range-next (range)
+  "Return a time range whose BEGIN date is the day following this TIME-RANGE."
   (let ((begin (get-range-begin range))	; uncooked
 	(end (get-range-end range))
 	(anchor (time-range-end range)))
@@ -1623,6 +1801,7 @@ reversed time sequence, or specify an inclusive endpoint."
 				    (time-range-duration range))))))))
 
 (defun time-range-previous (range)
+  "Return a time range whose BEGIN date is the day before this TIME-RANGE."
   (let ((begin (get-range-begin range))	; uncooked
 	(end (get-range-end range))
 	(anchor (time-range-begin range)))
