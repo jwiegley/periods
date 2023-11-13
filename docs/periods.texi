@@ -83,13 +83,26 @@ is not always easy to calculate.  Say they are entering their pay
 days; this could either fall bi-weekly, the second Friday of every
 month, or every 15 days, but the following Monday if that day falls on
 a weekend.  How is your code to calculate these moments in time,
-without resorting to contortionist uses of
-@code{encode-universal-time} and @code{decode-universal-time}?
+without resorting to contortionist uses of @code{encode-universal-time} and @code{decode-universal-time}?
 
     By way of a brief introduction to the following sections, here is
 how each of the above time expressions would be calculated.  The first
 three occurrences of each are shown, starting from @samp{Sun, 18 Nov
-2007}.  This code generates an unbounded series occurring bi-weekly,
+2007}. This code generates a list of dates occurring bi-weekly,
+or every 14 days, until next year:
+
+@lisp
+;; The date is written with (local-time:enable-read-macros)
+(list-times @@2007-11-18 (duration :days 14) (next-year))
+;; @result{}
+@@2007-12-02T01:00:00.000000+01:00
+@@2007-12-16T01:00:00.000000+01:00
+@@2007-12-30T01:00:00.000000+01:00
+@@2008-01-13T01:00:00.000000+01:00
+…
+@end lisp
+
+And this code, using the system @code{:period-series}, generates an unbounded series occurring bi-weekly,
 or every 14 days:
 
 @lisp
@@ -217,16 +230,63 @@ Return the corresponding detail associated with a given
 @include docstrings/fun-periods-days-in-month.texinfo
 @include docstrings/fun-periods-floor-time.texinfo
 @include docstrings/fun-periods-find-smallest-resolution.texinfo
-                
+@include docstrings/fun-periods-add-time.texinfo
+@include docstrings/fun-periods-time-difference.texinfo
+@include docstrings/macro-periods-with-timestamp-range.texinfo
+
 @node Time durations, Relative time, Fixed time, Top
 @chapter Time durations
-                
+
+@defun duration
+@end defun
+
+@include docstrings/fun-periods-add-duration.texinfo
+@include docstrings/fun-periods-subtract-duration.texinfo
+
 @node Relative time, Time ranges, Time durations, Top
 @chapter Relative time
 
+@section Helper functions for the current date
+
+There are helper functions to get dates relative to the current date:
+
+@defun this-year
+@end defun
+@defun this-month
+@end defun
+@defun today
+@end defun
+@defun this-day
+@end defun
+
+@defun this-hour
+@end defun
+@defun this-minute
+@end defun
+@defun this-second
+@end defun
+@defun next-year
+@end defun
+@defun next-month
+@end defun
+@defun next-day
+@end defun
+@defun previous-year
+@end defun
+
+and also:
+
+@end defun
+@defun next-monday
+@end defun
+
+
+and more.
+
+
 @node Time ranges, Time periods, Relative time, Top
 @chapter Time ranges
-                
+
 @node Time periods,  , Time ranges, Top
 @chapter Time periods
 

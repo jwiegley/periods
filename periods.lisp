@@ -852,7 +852,7 @@ tricky, however, so bear this in mind."
 
 (declaim (inline multiply-duration))
 (defun multiply-duration (left multiplier)
-  "Add one duration to another."
+  "Multiply one duration to another."
   (duration :years (* (duration-years left) multiplier)
 	    :months (* (duration-months left) multiplier)
 	    :days (* (duration-days left) multiplier)

@@ -1,0 +1,12 @@
+@anchor{Function duration}
+@deffn {Function} duration &rest args
+@findex duration
+Create a @code{duration} object.
+
+One thing to note about duration: there is no way to determine the total
+length of a duration in terms of any specific time quantity, without first
+binding that duration to a fixed point in time (after all, how many days are
+in a month if you don't know which month it is?)  Therefore, those looking for
+a function like "duration-seconds" are really wanting to work with ranges,
+not just durations.
+@end deffn

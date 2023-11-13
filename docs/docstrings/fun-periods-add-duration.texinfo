@@ -1,0 +1,5 @@
+@anchor{Function add-duration}
+@deffn {Function} add-duration left right
+@findex add-duration
+Add one duration to another.
+@end deffn

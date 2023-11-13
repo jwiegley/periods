@@ -15,9 +15,9 @@ For example, assuming the current time is "@@2007-11-17T23:02:00.000",
 compare these outputs:
 
 @lisp
-(fixed-time :month 4) ⇒ @@2007-04-01T00:00:00.000
-(fixed-time :day 10)  ⇒ @@2007-11-10T00:00:00.000
-(fixed-time :hour 15) ⇒ @@2007-11-17T15:00:00.000
+(fixed-time :month 4) ;; @result{} @@2007-04-01T00:00:00.000
+(fixed-time :day 10)  ;; @result{} @@2007-11-10T00:00:00.000
+(fixed-time :hour 15) ;; @result{} @@2007-11-17T15:00:00.000
 @end lisp
 
 This behavior makes it very easy to return a fixed time for "april of this
