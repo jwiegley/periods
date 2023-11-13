@@ -3,8 +3,10 @@
 # Create Texinfo snippets from the documentation of exported symbols.
 
 SBCL="$SBCLRUNTIME --noinform --noprint --disable-debugger"
-SBCL="$SBCL --load /Users/johnw/Library/Lisp/init.lisp"
-SBCL="$SBCL --load /Users/johnw/Library/Lisp/bootstrap.lisp"
+# SBCL="$SBCL --load /Users/johnw/Library/Lisp/init.lisp"
+SBCL="sbcl"
+# SBCL="$SBCL --load /Users/johnw/Library/Lisp/bootstrap.lisp"
+SBCL="sbcl"
 
 # Output directory.  This has to end with a slash (it's interpreted by Lisp's
 # `pathname' function) or you lose.  This is normally set from Makefile.
