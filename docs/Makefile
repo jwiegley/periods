@@ -1,15 +1,16 @@
+.PHONY: docstrings
 SBCL = sbcl
 MODULES = ':PERIODS'
 
 all: html info
 
 docstrings: make-tempfiles.sh
-	@mkdir docstrings
+	[ -d docstrings ] ||	@mkdir docstrings
 	SBCLRUNTIME=$(SBCL) MODULES=$(MODULES) ./make-tempfiles.sh
 	perl -i -pe 's/periods://g' docstrings/*.texinfo
 	perl -i -pe 's/^  // if /@lisp/ .. /@end lisp/' docstrings/*.texinfo
-	perl -i -pe 's/=>/@result{}/ if /@lisp/ .. /@end lisp/' docstrings/*.texinfo
-	perl -i -pe 's/.../@dots{}/g' docstrings/*.texinfo
+	sed -i 's@=>@;; \@result{}@g' docstrings/*.texinfo
+	# perl -i -pe 's/.../@dots{}/g' docstrings/*.texinfo
 
 info: periods.info
 
@@ -18,7 +19,7 @@ periods.info: periods.texi docstrings
 
 # Nice sed: @ is a separator just like the usual / but helping us to not escape the real /
 # Using https://github.com/orthecreedence/highlight-lisp/
-html: periods.texi
+html: periods.texi docstrings
 	makeinfo --html --no-split periods.texi -o index.html
 	sed -i "s@</body>@</body>  <script> HighlightLisp.highlight_auto(); HighlightLisp.paren_match(); </script>@g" index.html
 	sed -i "s@</pre>@</code></pre>@g" index.html
