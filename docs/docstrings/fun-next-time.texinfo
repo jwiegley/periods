@@ -1,0 +1,58 @@
+@c added manually from periods.texinfo
+@anchor{Function next-time}
+@deffn {Function} next-time anchor relative-time &key reverse accept-anchor recursive-call
+@findex next-time
+Compute the first time after @code{fixed-time} which matches @code{relative-time}.
+
+This function finds the first moment after @code{fixed-time} which honors every
+element in @code{relative-time:}
+
+@lisp
+(next-time @@2007-05-20 (relative-time :month 3)) ;; @result{} @@2008-03-20
+@end lisp
+
+The relative time constructor arguments may also be symbolic:
+
+@lisp
+(relative-time :month :this)
+(relative-time :month :next)
+(relative-time :month :prev)
+@end lisp
+
+To find the date two weeks after next February, a combination of @code{next-time}
+and @code{add-time} must be used, since "next February" is a relative time concept,
+while "two weeks" is a duration concept:
+
+@lisp
+(add-time (next-time @@2007-05-20 (relative-time :month 2))
+    (duration :days 14))
+@end lisp
+
+@code{note:} The keyword arguments to @code{relative-time} are always singular; those to
+@code{duration} are always plural.
+
+The following form resolves to the first sunday of the given year:
+
+@lisp
+(next-time (previous-time @@2007-05-20
+                    (relative-time :month 1 :day 1))
+     (relative-time :week-day 0))
+@end lisp
+
+This form finds the first Friday the 13th after today:
+
+@lisp
+(next-time @@2007-05-20 (relative-time :day 13 :day-of-week 5))
+@end lisp
+
+@code{note:} When adding times, @code{next-time} always seeks the next time that fully
+honors your request.  If asked for Feb 29, the year of the resulting time will
+fall in a leap year.  If asked for Thu, Apr 29, it returns the next occurrence
+of Apr 29 which falls on a Friday.  Example:
+
+@lisp
+(next-time @@2007-11-01
+     (relative-time :month 4 :day 29 :day-of-week 4))
+;; @result{} @@2010-04-29T00:00:00.000
+@end lisp
+@end deffn

@@ -1,0 +1,31 @@
+@anchor{Macro with-timestamp-range}
+@deffn {Macro} with-timestamp-range (min-symbol max-symbol &optional update) &body body
+@findex with-timestamp-range
+Define a context where (1) @code{min-symbol} and @code{max-symbol} are locally
+bound variables with @code{nil} default values and (2) @code{update} names a
+lexically bound function which takes a timestamp and updates the
+variables @code{min-symbol} and @code{max-symbol} so that they respectively hold the
+earliest and latest timestamp after successive invocations. That
+function finally returns its input value. For example, the following
+code builds a @code{time-range} instance from a list of dated transactions.
+
+@lisp
+    (with-timestamp-range (earliest latest)
+      (dolist (tt transaction)
+        (update-range (transaction-date tt)))
+      (time-range :begin earliest :end latest :end-inclusive-p t))
+@end lisp
+
+A custom name can be used to nest invocations:
+
+@lisp
+    (with-timestamp-range (earliest latest global-update-range)
+      (dolist (jj journals)
+        (with-timestamp-range (<< >>)
+          (dolist (tt (journal-xact jj))
+            (gloal-update-range
+              (update-range (transaction-date tt))))
+          (format t "Journal earliest / latest: ~A / ~A~%" << >>)))
+      (format t "Global earliest / latest: ~A / ~A~%" earliest latest))
+@end lisp
+@end deffn

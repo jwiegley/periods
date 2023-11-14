@@ -1,0 +1,20 @@
+@anchor{Function time-difference}
+@deffn {Function} time-difference left right
+@findex time-difference
+Compute the duration existing between fixed-times @code{left} and @code{right}.
+
+The order of left or right is ignored; the returned @code{duration}, if added to
+the earlier value, will result in the later.
+
+A complexity of this process which might surprise some is that larger
+quantities are added by @code{add-time} before smaller quantities.  For example, what
+is the difference between 2003-02-10 and 2004-03-01?  If you add years before
+days, the difference is 1 year and 20 days.  If you were to add days before
+years, however, the difference would be 1 year and 21 days.  The question, do
+you advance to 2004 and then calculate between 2-10 and 3-01, or do you move
+from 2-10 to 3-01, and then increment the year?  This library chooses to add
+years before days, since this follows human reckoning a bit closer (i.e., a
+person would likely flip to the 2004 calendar and then start counting off
+days, rather than the other way around).  This difference in reckoning can be
+tricky, however, so bear this in mind.
+@end deffn

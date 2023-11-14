@@ -1,0 +1,21 @@
+@anchor{Function add-time}
+@deffn {Function} add-time fixed-time duration &key reverse
+@findex add-time
+Given a @code{fixed-time}, add the supplied @code{duration}.
+
+Example (reader notation requires calling LOCAL-TIME:ENABLE-READ-MACROS):
+
+@lisp
+(add-time @@2007-05-20T12:10:10.000 (duration :hours 50))
+  ;; @result{} @@2007-05-22T14:10:10.000
+@end lisp
+
+@code{note:} This function always adds the largest increments first, so:
+
+@lisp
+(add-time @@2003-01-09 (duration :years 1 :days 20)) ;; @result{} @@2004-02-29
+@end lisp
+
+If days has been added before years, the result would have been
+"@@2004-03-01".
+@end deffn
