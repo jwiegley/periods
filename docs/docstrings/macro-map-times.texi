@@ -1,0 +1,13 @@
+@c added from periods.texinfo after running (sb-texinfo::document-package :periods)
+@anchor{Macro map-times}
+@deffn {Macro} map-times callable start duration end &key reverse inclusive-p
+@findex map-times
+Map over a set of times separated by @code{duration}, calling @code{callable} with the
+start of each.
+
+Example:
+
+@lisp
+  (map-times #'print (now) (duration :hours 1) (next-day))
+@end lisp
+@end deffn

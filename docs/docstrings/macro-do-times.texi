@@ -1,0 +1,30 @@
+@c added from periods.texinfo after running (sb-texinfo::document-package :periods)
+@anchor{Macro do-times}
+@deffn {Macro} do-times (var start duration end &optional result) &body body
+@findex do-times
+Evaluate body where @code{var} is bound to a time starting at @code{start} @code{+} @code{duration}, separated by @code{duration}, until and excluding @code{end}.
+
+A 'do' style version of the functional @code{map-times} macro.
+
+The disadvantage to @code{do-times} is that there is no way to ask for a reversed
+time sequence, or specify an inclusive endpoint.
+
+Return @code{nil}.
+
+Example:
+
+@lisp
+;; when now is @@2023-11-14T09:05:00
+(do-times (time (now)
+              (duration :hours 1)
+              (next-day))
+  (print time))
+;; =>
+@@2023-11-14T10:04:31.475324+01:00
+@@2023-11-14T11:04:31.475324+01:00
+@@2023-11-14T12:04:31.475324+01:00
+[…]
+@@2023-11-14T23:04:31.475324+01:00
+NIL
+@end lisp
+@end deffn

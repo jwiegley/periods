@@ -121,7 +121,6 @@
            do-times
            list-times
            map-times
-           loop-times
            next-time
            previous-time
            next-monday
@@ -907,7 +906,11 @@ start of each."
 (defmacro map-times (callable start duration end
 		     &key (reverse nil) (inclusive-p nil))
   "Map over a set of times separated by DURATION, calling CALLABLE with the
-start of each."
+start of each.
+
+Example:
+
+  (map-times #'print (now) (duration :hours 1) (next-day))"
   `(loop-times (do (funcall ,callable value))
       ,start ,duration ,end :reverse ,reverse
       :inclusive-p ,inclusive-p))
@@ -918,7 +921,7 @@ start of each."
 
 Example:
 
-  (list-times (local-time:now) (duration :days 3) (next-sunday-week))
+  (list-times (now) (duration :days 3) (next-sunday-week))
   ;; => (@2023-11-16T18:16:05.836900+01:00 @2023-11-19T18:16:05.836900+01:00)"
   `(loop-times (collect value)
       ,start ,duration ,end :reverse ,reverse
@@ -926,7 +929,9 @@ Example:
 
 (defmacro do-times ((var start duration end &optional (result nil))
 		    &body body)
-  "A 'do' style version of the functional MAP-TIMES macro.
+  "Evaluate body where VAR is bound to a time starting at START + DURATION, separated by DURATION, until and excluding END.
+
+A 'do' style version of the functional MAP-TIMES macro.
 
 The disadvantage to DO-TIMES is that there is no way to ask for a reversed
 time sequence, or specify an inclusive endpoint.
@@ -935,16 +940,17 @@ Return NIL.
 
 Example:
 
-(do-times (time (today)
+;; when now is @2023-11-14T09:05:00
+(do-times (time (now)
               (duration :hours 1)
               (next-day))
   (print time))
 ;; =>
-@2023-11-13T02:00:00.000000+01:00
-@2023-11-13T03:00:00.000000+01:00
-@2023-11-13T04:00:00.000000+01:00
+@2023-11-14T10:04:31.475324+01:00
+@2023-11-14T11:04:31.475324+01:00
+@2023-11-14T12:04:31.475324+01:00
 […]
-@2023-11-13T23:00:00.000000+01:00
+@2023-11-14T23:04:31.475324+01:00
 NIL
 "
   `(block nil
@@ -1758,7 +1764,7 @@ Example:
 Example:
 
 (time-within-range-p
-   (local-time:now)
+   (now)
    (time-range :begin (previous-day)
                :end (next-day)))"
   (let ((begin (time-range-begin range))

@@ -232,19 +232,84 @@ Return the corresponding detail associated with a given
 @include docstrings/fun-periods-find-smallest-resolution.texinfo
 @include docstrings/fun-periods-add-time.texinfo
 @include docstrings/fun-periods-time-difference.texinfo
-@include docstrings/macro-periods-with-timestamp-range.texinfo
 
 @node Time durations, Relative time, Fixed time, Top
 @chapter Time durations
 
-@defun duration
-@end defun
+The basic element is the @code{duration} structure. It has the slots @code{years, months, days, hours, minutes, seconds} down to nanoseconds.
+
+Create a duration with the @code{duration} function. It accepts a key argument for each slot:
+
+@lisp
+(duration :days 3)
+;; =>
+#S(DURATION
+   :YEARS 0
+   :MONTHS 0
+   :DAYS 3
+   :HOURS 0
+   :MINUTES 0
+   :SECONDS 0
+   :MILLISECONDS 0
+   :MICROSECONDS 0
+   :NANOSECONDS 0)
+@end lisp
+
+@anchor{Function duration}
+@deffn {Function} duration &rest args
+@findex duration
+Create a @code{duration} object.
+
+  One thing to note about duration: there is no way to determine the total
+length of a duration in terms of any specific time quantity, without first
+binding that duration to a fixed point in time (after all, how many days are
+in a month if you don't know which month it is?)  Therefore, those looking for
+a function like "duration-seconds" are really wanting to work with ranges,
+not just durations.
+@end deffn
+
+Access each duration slot with its accessor: @code{duration-days} and so on.
+
+@section Looping over durations
+
+@include docstrings/macro-do-times.texi
+@include docstrings/macro-map-times.texi
+
+@section Duration helper functions
 
 @include docstrings/fun-periods-add-duration.texinfo
 @include docstrings/fun-periods-subtract-duration.texinfo
+@deffn {Function} multiply-duration left multiplier
+@findex multiply-duration
+Multiply one duration to another.
+@end deffn
 
 @node Relative time, Time ranges, Time durations, Top
 @chapter Relative time
+
+A relative time allows to work with ranges.
+
+A @code{relative-time} structure has the slots @code{year, month, week, day-of-week, day, hour, minute, second} down to nanosecond.
+
+@include docstrings/fun-next-time.texinfo
+
+@anchor{Function previous-time}
+@deffn {Function} previous-time anchor relative-time &key accept-anchor
+@findex previous-time
+This function is the reverse of `NEXT-TIME'.  Please look there for more.
+@end deffn
+
+@anchor{Macro map-relative-times}
+@deffn {Macro} map-relative-times callable anchor relative-time end &key reverse inclusive-p
+@end deffn
+
+@anchor{Macro list-relative-times}
+@deffn {Macro} list-relative-times anchor relative-time end &key reverse inclusive-p
+@end deffn
+
+@anchor{Macro do-relative-times}
+@deffn {Macro} do-relative-times var anchor relative-time end &key reverse inclusive-p
+@end deffn
 
 @section Helper functions for the current date
 
@@ -276,10 +341,16 @@ There are helper functions to get dates relative to the current date:
 
 and also:
 
-@end defun
 @defun next-monday
 @end defun
 
+up to @code{next-sunday}, @code{previous-} versions,
+
+
+@defun year-begin
+@end defun
+
+and also @code{sunday-week-begin, monday-week-begin, day-begin, hour-begin} down to microsecond, and @code{end-} versions,
 
 and more.
 
@@ -287,7 +358,78 @@ and more.
 @node Time ranges, Time periods, Relative time, Top
 @chapter Time ranges
 
+@anchor{Function time-range}
+@deffn {Function} time-range &rest args
+@findex time-range
+Create a @code{time-range}.
+
+Params: the @code{time-range} struct slots (:begin, :end, :duration…).
+
+Example:
+
+@lisp
+  (time-range :begin (next-day) :end (next-sunday-week))
+  ;; =>
+  #S(PERIODS:TIME-RANGE
+   :FIXED-BEGIN NIL
+   :BEGIN @@2023-11-14T00:00:00.000000+01:00
+   :BEGIN-INCLUSIVE-P T
+   :FIXED-END NIL
+   :END @@2023-11-19T17:51:58.625785+01:00
+   :END-INCLUSIVE-P NIL
+   :DURATION NIL
+   :ANCHOR NIL)
+@end lisp
+@end deffn
+
+Use its accessor functions: @code{time-range-begin} etc.
+
+@defun time-range-next range
+@end defun
+@defun time-range-previous range
+@end defun
+
+@anchor{Function periods:time-within-range-p}
+@deffn {Function} periods:time-within-range-p fixed-time range
+@findex periods:time-within-range-p
+Return @code{t} if @code{fixed-time} is with this @code{time-range}.
+
+Example:
+
+(time-within-range-p
+   (local-time:now)
+   (time-range :begin (periods:previous-day)
+               :end (periods:next-day)))
+@end deffn
+@anchor{Function time-within-range-p}
+@deffn {Function} time-within-range-p fixed-time range
+@findex time-within-range-p
+Return @code{t} if @code{fixed-time} is with this @code{time-range}.
+
+Example:
+
+(time-within-range-p
+   (local-time:now)
+   (time-range :begin (previous-day)
+               :end (next-day)))
+@end deffn
+
+@defun year-range fixed-time
+@end defun
+
+@defun month-range fixed-time
+@end defun
+
+down to @code{second-range}.
+
 @node Time periods,  , Time ranges, Top
 @chapter Time periods
+
+@include docstrings/macro-periods-with-timestamp-range.texinfo
+
+@chapter General purpose
+
+@defun sleep-until fixed-time
+@end defun
 
 @bye
