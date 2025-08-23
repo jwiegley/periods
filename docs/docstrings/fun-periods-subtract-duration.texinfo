@@ -1,0 +1,5 @@
+@anchor{Function subtract-duration}
+@deffn {Function} subtract-duration left right
+@findex subtract-duration
+Subtract one duration from another.
+@end deffn
